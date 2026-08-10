@@ -40,6 +40,8 @@ extern SDL_Window *g_window;
 
 #define MAX_NUM_VERTEX_BUFFERS          (2)
 #define PSX_SCREEN_ASPECT               (240.0f / 320.0f) // PSX screen is mapped always to this aspect
+#define NATIVE_ENGINE_RENDER_WIDTH_4K   (3840)
+#define NATIVE_ENGINE_RENDER_HEIGHT_4K  (2160)
 
 #if defined(CTR_INTERNAL)
 #ifndef GL_TIME_ELAPSED
@@ -137,6 +139,7 @@ int g_cfg_bilinearFiltering = 0;
 // texture on the GPU instead of a GPU-to-CPU-to-GPU round trip.
 global_variable GLuint s_packShader = 0;
 global_variable GLint s_packFlipYLoc = -1;
+global_variable GLuint s_presentMainShader = 0;
 global_variable GLuint s_presentVramShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
 global_variable GLuint s_vramQuadVAO = 0;
@@ -158,6 +161,9 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
 internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y);
+internal void NativeRenderer_GetMainTargetSize(int logicalWidth, int logicalHeight, int *targetWidth, int *targetHeight);
+internal int NativeRenderer_ScaleAxisFloor(int value, int logicalExtent, int targetExtent);
+internal int NativeRenderer_ScaleAxisCeil(int value, int logicalExtent, int targetExtent);
 #if defined(CTR_INTERNAL)
 internal void NativeRenderer_ResolveGpuMeasurements(b32 waitForResults);
 #endif
@@ -279,6 +285,7 @@ void NativeRenderer_Shutdown(void)
 	NativeRenderer_DestroyTexture(s_whiteTexture);
 	NativeRenderer_DestroyTexture(s_rgLutTexture);
 	glDeleteProgram(s_packShader);
+	glDeleteProgram(s_presentMainShader);
 	glDeleteProgram(s_presentVramShader);
 	glDeleteVertexArrays(1, &s_vramQuadVAO);
 	glDeleteBuffers(1, &s_vramQuadVBO);
@@ -447,6 +454,55 @@ internal void NativeRenderer_SetPresentationAspect(int width, int height)
 	s_presentAspectH = height / divisor;
 }
 
+internal void NativeRenderer_GetMainTargetSize(int logicalWidth, int logicalHeight, int *targetWidth, int *targetHeight)
+{
+	int width = g_windowWidth;
+	int height = g_windowHeight;
+
+	if (width < NATIVE_ENGINE_RENDER_WIDTH_4K)
+	{
+		width = NATIVE_ENGINE_RENDER_WIDTH_4K;
+	}
+
+	if (height < NATIVE_ENGINE_RENDER_HEIGHT_4K)
+	{
+		height = NATIVE_ENGINE_RENDER_HEIGHT_4K;
+	}
+
+	if (logicalWidth <= 0)
+	{
+		width = 1;
+	}
+
+	if (logicalHeight <= 0)
+	{
+		height = 1;
+	}
+
+	*targetWidth = width;
+	*targetHeight = height;
+}
+
+internal int NativeRenderer_ScaleAxisFloor(int value, int logicalExtent, int targetExtent)
+{
+	if (logicalExtent <= 0)
+	{
+		return value;
+	}
+
+	return (int)(((s64)value * targetExtent) / logicalExtent);
+}
+
+internal int NativeRenderer_ScaleAxisCeil(int value, int logicalExtent, int targetExtent)
+{
+	if (logicalExtent <= 0)
+	{
+		return value;
+	}
+
+	return (int)((((s64)value * targetExtent) + logicalExtent - 1) / logicalExtent);
+}
+
 internal void NativeRenderer_UpdatePresentationViewport(void)
 {
 	int viewportW;
@@ -559,6 +615,7 @@ internal void NativeRenderer_BindMainRenderTarget(void)
 		height = activeDrawEnv.clip.h;
 	}
 
+	NativeRenderer_GetMainTargetSize(width, height, &width, &height);
 	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, width, height);
 	glBindFramebuffer(GL_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
 }
@@ -1115,6 +1172,23 @@ global_variable const char *ctr_present_vram_shader = "#ifdef VERTEX\n"
                                                       "}\n"
                                                       "#endif\n";
 
+global_variable const char *ctr_present_main_shader = "#ifdef VERTEX\n"
+                                                      "attribute vec2 a_position;\n"
+                                                      "varying vec2 v_uv;\n"
+                                                      "void main() {\n"
+                                                      "\tvec2 screenUV = a_position * 0.5 + 0.5;\n"
+                                                      "\tv_uv = screenUV;\n"
+                                                      "\tgl_Position = vec4(a_position, 0.0, 1.0);\n"
+                                                      "}\n"
+                                                      "#endif\n"
+                                                      "#ifdef FRAGMENT\n"
+                                                      "varying vec2 v_uv;\n"
+                                                      "uniform sampler2D s_src;\n"
+                                                      "void main() {\n"
+                                                      "\tfragColor = texture2D(s_src, v_uv);\n"
+                                                      "}\n"
+                                                      "#endif\n";
+
 internal void NativeRenderer_InitVRAMPipelines(void)
 {
 	local_persist const float quad[12] = {-1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f};
@@ -1124,6 +1198,11 @@ internal void NativeRenderer_InitVRAMPipelines(void)
 	const GLint packSrcLoc = glGetUniformLocation(s_packShader, "s_src");
 	s_packFlipYLoc = glGetUniformLocation(s_packShader, "flipY");
 	glUniform1i(packSrcLoc, 0);
+	glUseProgram(0);
+
+	s_presentMainShader = NativeRenderer_Shader_Compile(ctr_present_main_shader, false);
+	glUseProgram(s_presentMainShader);
+	glUniform1i(glGetUniformLocation(s_presentMainShader, "s_src"), 0);
 	glUseProgram(0);
 
 	s_presentVramShader = NativeRenderer_Shader_Compile(ctr_present_vram_shader, false);
@@ -1193,8 +1272,8 @@ int NativeRenderer_InitialisePSX(void)
 	glBlendColor(0.5f, 0.5f, 0.5f, 0.25f);
 
 	// Main and offscreen draws share one explicit render-target contract. The
-	// main target stays at CTR's logical display size; host scaling is deferred
-	// to presentation.
+	// main target renders at native resolution, while a PSX-sized VRAM copy is
+	// still maintained for feedback effects and compatibility.
 	NativeRenderer_InitRenderTarget(&s_mainRenderTarget);
 	NativeRenderer_InitRenderTarget(&s_offscreenRenderTarget);
 
@@ -1328,12 +1407,14 @@ void NativeRenderer_SetupClipMode(const RECT16 *rect, const DISPENV *displayEnv,
 		clipRectX += 0.5f;
 	}
 
-	// Normal game draws target the PSX-sized main framebuffer. Host-window
-	// coordinates are introduced only by the final presentation pass.
+	// Normal game draws target the native-resolution main framebuffer.
 	const float viewportX = 0.0f;
 	const float viewportY = 0.0f;
-	const float viewportW = (float)displayEnv->disp.w;
-	const float viewportH = (float)displayEnv->disp.h;
+	int targetW;
+	int targetH;
+	NativeRenderer_GetMainTargetSize(displayEnv->disp.w, displayEnv->disp.h, &targetW, &targetH);
+	const float viewportW = (float)targetW;
+	const float viewportH = (float)targetH;
 	const float flipOffset = viewportY + viewportH - clipRectH * viewportH;
 	const float crx = viewportX + clipRectX * viewportW;
 	const float cry = clipRectY * viewportH;
@@ -1678,6 +1759,10 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 		return;
 	}
 
+	int targetW;
+	int targetH;
+	NativeRenderer_GetMainTargetSize(displayW, displayH, &targetW, &targetH);
+
 	const int clearRight = x + w;
 	const int clearBottom = y + h;
 	const int displayRight = displayX + displayW;
@@ -1695,10 +1780,10 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 
 	const int relX = overlapX - displayX;
 	const int relBottom = overlapBottom - displayY;
-	const int scissorX = relX;
-	const int scissorY = displayH - relBottom;
-	const int scissorW = overlapRight - overlapX;
-	const int scissorH = overlapBottom - overlapY;
+	const int scissorX = NativeRenderer_ScaleAxisFloor(relX, displayW, targetW);
+	const int scissorY = NativeRenderer_ScaleAxisFloor(displayH - relBottom, displayH, targetH);
+	const int scissorW = NativeRenderer_ScaleAxisCeil(overlapRight - overlapX, displayW, targetW);
+	const int scissorH = NativeRenderer_ScaleAxisCeil(overlapBottom - overlapY, displayH, targetH);
 
 	if ((scissorW <= 0) || (scissorH <= 0))
 	{
@@ -1898,7 +1983,18 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 		}
 
 		s_previousOffscreenState = 1;
-		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, offscreenRect->w, offscreenRect->h);
+		int mainTargetW;
+		int mainTargetH;
+		int scaledW;
+		int scaledH;
+		const int logicalDisplayW = activeDispEnv.disp.w > 0 ? activeDispEnv.disp.w : offscreenRect->w;
+		const int logicalDisplayH = activeDispEnv.disp.h > 0 ? activeDispEnv.disp.h : offscreenRect->h;
+
+		NativeRenderer_GetMainTargetSize(logicalDisplayW, logicalDisplayH, &mainTargetW, &mainTargetH);
+		scaledW = NativeRenderer_ScaleAxisCeil(offscreenRect->w, logicalDisplayW, mainTargetW);
+		scaledH = NativeRenderer_ScaleAxisCeil(offscreenRect->h, logicalDisplayH, mainTargetH);
+
+		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, scaledW, scaledH);
 		s_previousOffscreen = *offscreenRect;
 		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y);
 	}
@@ -2124,6 +2220,26 @@ void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, in
 	NativeRenderer_SetBlendMode(BM_NONE);
 
 	NativeRenderer_DrawVRAMRegion(displayX, displayY, displayW, displayH);
+	glBindVertexArray(0);
+
+	s_previousShader = (ShaderID)-1;
+	s_lastBoundTexture = (TextureID)-1;
+}
+
+void NativeRenderer_PresentMainRenderTarget(void)
+{
+	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	NativeRenderer_SetScissorState(0);
+	NativeRenderer_EnableDepth(0);
+	NativeRenderer_SetBlendMode(BM_NONE);
+
+	glUseProgram(s_presentMainShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, s_mainRenderTarget.texture);
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
 	glBindVertexArray(0);
 
 	s_previousShader = (ShaderID)-1;

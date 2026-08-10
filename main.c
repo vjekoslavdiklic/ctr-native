@@ -95,6 +95,12 @@
 #define CTR_NATIVE_BUILD_ID "unknown"
 #endif
 
+enum
+{
+	CTR_NATIVE_STARTUP_WIDTH_4K = 3840,
+	CTR_NATIVE_STARTUP_HEIGHT_4K = 2160,
+};
+
 static int NativeConsole_ShouldPauseOnError(void)
 {
 #if defined(_WIN32)
@@ -185,10 +191,10 @@ int main(int argc, char *argv[])
 
 #ifdef USE_16BY9
 	printf("[CTR Native] Widescreen\n");
-	Platform_Init("Crash Team Racing", 1280, 720);
+	Platform_Init("Crash Team Racing", CTR_NATIVE_STARTUP_WIDTH_4K, CTR_NATIVE_STARTUP_HEIGHT_4K);
 #else
 	printf("[CTR Native] 4:3\n");
-	Platform_Init("Crash Team Racing", 800, 600);
+	Platform_Init("Crash Team Racing", CTR_NATIVE_STARTUP_WIDTH_4K, CTR_NATIVE_STARTUP_HEIGHT_4K);
 #endif
 
 #if defined(CTR_INTERNAL)

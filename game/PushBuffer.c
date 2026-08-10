@@ -1,5 +1,23 @@
 #include <common.h>
 
+#ifdef CTR_NATIVE
+enum
+{
+	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM = 10,
+	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN = 1,
+};
+
+static int PushBuffer_ScaleTraversalDepth(int depth)
+{
+	return (depth * CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM) / CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN;
+}
+#else
+static int PushBuffer_ScaleTraversalDepth(int depth)
+{
+	return depth;
+}
+#endif
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x800426f8-0x80042910.
 void PushBuffer_Init(struct PushBuffer *pb, int id, int total)
@@ -570,6 +588,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 
 	int val_X;
 	int val_Y;
+	int farDepth;
 
 	// Retail packs screen-space corner x/y into a single GTE VXY word.
 	union FrustumCornerIN frustumCorner[4];
@@ -599,6 +618,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 #endif
 
 	PushBuffer_SetMatrixVP(pb);
+	farDepth = PushBuffer_ScaleTraversalDepth(0x100);
 
 	cameraPosX = pb->pos.x;
 	cameraPosY = pb->pos.y;
@@ -647,10 +667,11 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 		// from end of PushBuffer_SetMatrixVP (called earlier)
 		PushBuffer_UpdateFrustum_ReadMAC(&tx, &ty, &tz);
 
-		// far clip: pos + dir*100
-		posX = tx * 0x100 + cameraPosX;
-		posY = ty * 0x100 + cameraPosY;
-		posZ = tz * 0x100 + cameraPosZ;
+		// Native can safely extend the traversal bbox farther than retail to
+		// reduce BSP pop-in without altering camera projection or screen-space math.
+		posX = tx * farDepth + cameraPosX;
+		posY = ty * farDepth + cameraPosY;
+		posZ = tz * farDepth + cameraPosZ;
 
 		iVar19 = 0x1000;
 
@@ -658,7 +679,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 		fcOUT->pos.y = ty + cameraPosY;
 		fcOUT->pos.z = tz + cameraPosZ;
 
-		// far clip: pos + dir*100
+		// far clip: pos + dir*farDepth
 		spf->clippedFarPos.x = posX;
 		spf->clippedFarPos.y = posY;
 		spf->clippedFarPos.z = posZ;

@@ -1,5 +1,23 @@
 #include <common.h>
 
+#ifdef CTR_NATIVE
+enum
+{
+	CTR_NATIVE_MODEL_LOD_DISTANCE_SCALE_NUM = 10,
+	CTR_NATIVE_MODEL_LOD_DISTANCE_SCALE_DEN = 1,
+};
+
+static int RenderBucket_ScaleNativeModelLodDistance(int distance)
+{
+	return (distance * CTR_NATIVE_MODEL_LOD_DISTANCE_SCALE_NUM) / CTR_NATIVE_MODEL_LOD_DISTANCE_SCALE_DEN;
+}
+#else
+static int RenderBucket_ScaleNativeModelLodDistance(int distance)
+{
+	return distance;
+}
+#endif
+
 
 struct RenderBucketEntry
 {
@@ -1271,7 +1289,7 @@ static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst,
 	// comparison and walk as explicit C state.
 	for (;;)
 	{
-		if (RenderBucket_MipsSub(projectedDistance, (u16)mh->maxDistanceLOD) < 0)
+		if (RenderBucket_MipsSub(projectedDistance, RenderBucket_ScaleNativeModelLodDistance((u16)mh->maxDistanceLOD)) < 0)
 		{
 			*lodIndexOut = lodIndex;
 			return mh;

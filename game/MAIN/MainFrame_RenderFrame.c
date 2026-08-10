@@ -13,6 +13,24 @@
 volatile int gCtrDebugSkipLevelGeometry = 0;
 #endif
 
+#ifdef CTR_NATIVE
+enum
+{
+	CTR_NATIVE_LEVEL_LOD_DISTANCE_SCALE_NUM = 10,
+	CTR_NATIVE_LEVEL_LOD_DISTANCE_SCALE_DEN = 1,
+};
+
+static int MainFrame_ScaleNativeDrawDistanceThreshold(int value)
+{
+	return (value * CTR_NATIVE_LEVEL_LOD_DISTANCE_SCALE_NUM) / CTR_NATIVE_LEVEL_LOD_DISTANCE_SCALE_DEN;
+}
+#else
+static int MainFrame_ScaleNativeDrawDistanceThreshold(int value)
+{
+	return value;
+}
+#endif
+
 void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamepads)
 {
 	struct Level *lev = gGT->level1;
@@ -923,7 +941,6 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->textureLodDepthThreshold1 = 0x500;
 			scratch->topLevelNearDepthThreshold = 0x280;
 			scratch->recursiveNearDepthThreshold = 0x140;
-			scratch->fullDynamicFadeDepthStart = scratch->bspLodDistanceThreshold + MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET;
 		}
 
 		// every non-cutscene,
@@ -939,8 +956,12 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 			scratch->textureLodDepthThreshold1 = CTR_MipsMulLo(distToScreen, 0xc);
 			scratch->topLevelNearDepthThreshold = CTR_MipsMulLo(distToScreen, 7);
 			scratch->recursiveNearDepthThreshold = RenderAllLevelGeometry_ScaleDistanceShift8(distToScreen, 0x380);
-			scratch->fullDynamicFadeDepthStart = CTR_MipsAddLo(scratch->bspLodDistanceThreshold, MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET);
 		}
+
+		scratch->bspLodDistanceThreshold = MainFrame_ScaleNativeDrawDistanceThreshold(scratch->bspLodDistanceThreshold);
+		scratch->textureLodDepthThreshold0 = MainFrame_ScaleNativeDrawDistanceThreshold(scratch->textureLodDepthThreshold0);
+		scratch->textureLodDepthThreshold1 = MainFrame_ScaleNativeDrawDistanceThreshold(scratch->textureLodDepthThreshold1);
+		scratch->fullDynamicFadeDepthStart = scratch->bspLodDistanceThreshold + MAIN_RENDER_LEVEL_GEOMETRY_FULL_DYNAMIC_FADE_OFFSET;
 
 		RenderLists_PreInit();
 		gGT->bspLeafsDrawn = 0;
