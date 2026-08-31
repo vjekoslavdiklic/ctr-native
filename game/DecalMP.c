@@ -1,6 +1,10 @@
 
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_renderer.h>
+#endif
+
 struct DecalMPEntry
 {
 	s16 timer;
@@ -37,6 +41,19 @@ void DecalMP_01(struct GameTracker *gGT)
 	}
 
 	int entryIndex = 0;
+
+#if defined(CTR_NATIVE)
+	// The original game leaves unused entries alive until the next level load.
+	// That is harmless when every decal is a tiny, heavily throttled PSX tile,
+	// but native render targets can otherwise draw a previous race/battle kart
+	// after the active player set changes. Rebuild the live list every frame.
+	for (int index = 0; index < 12; index++)
+	{
+		struct DecalMPEntry *entry = DecalMP_GetEntry(gGT, index);
+		entry->inst = NULL;
+		entry->boolUpdatedThisFrame = 0;
+	}
+#endif
 
 	for (int cameraID = 0; cameraID < gGT->numPlyrCurrGame; cameraID++)
 	{
@@ -103,12 +120,30 @@ void DecalMP_02(struct GameTracker *gGT)
 		if ((idpp->instFlags & 0x140) == 0x140)
 		{
 			timer = entry->timer;
+
+#if !defined(CTR_NATIVE)
 			int minFrames = entry->pb.renderBucketOTByteOffset >> 3;
 			if (minFrames < 2)
 			{
 				minFrames = 2;
 			}
+#endif
 
+			// DecalMP is a PSX bandwidth optimization: it normally reuses the
+			// 96x64 capture for one or more frames. On native, that gives remote
+			// battle karts a stale pose/character image, especially while their
+			// projected size or LOD changes. Current hardware can afford a fresh
+			// capture every frame, while retaining the retail path elsewhere.
+#if defined(CTR_NATIVE)
+			entry->boolUpdatedThisFrame = 1;
+
+			if ((entry->pb.ptrOT != NULL) && (entry->pb.renderBucketOTRangeEnd != NULL))
+			{
+				uint32_t *cameraOT = gGT->pushBuffer[cameraID].ptrOT;
+				*entry->pb.ptrOT = cameraOT[0x3ff];
+				cameraOT[0x3ff] = CtrGpu_PrimToOTLink24(entry->pb.renderBucketOTRangeEnd);
+			}
+#else
 			if ((timer < 1000) && (((timer <= minFrames) && (entry->lodIndex == idpp->lodIndex)) || (((gGT->timer ^ index) & 1) == 0)))
 			{
 				idpp->instFlags |= 0x80;
@@ -125,6 +160,7 @@ void DecalMP_02(struct GameTracker *gGT)
 					cameraOT[0x3ff] = CtrGpu_PrimToOTLink24(entry->pb.renderBucketOTRangeEnd);
 				}
 			}
+#endif
 
 			timer++;
 			if ((gGT->gameMode1 & PAUSE_ALL) == 0)
@@ -183,6 +219,15 @@ void DecalMP_03(struct GameTracker *gGT)
 
 			viewport.x = (s16)texX;
 			viewport.y = (s16)texY;
+
+#if defined(CTR_NATIVE)
+			// The retail path redraws over the existing 96x64 VRAM tile. That
+			// leaves pixels from an older kart pose wherever the current model is
+			// smaller or moves within the tile. Start every native capture from a
+			// transparent PSX-black tile so disappeared remote players cannot
+			// leave a ghost image behind.
+			NativeRenderer_ClearVRAM(viewport.x, viewport.y, viewport.w, viewport.h, 0, 0, 0);
+#endif
 
 			PushBuffer_SetDrawEnv_DecalMP(entry->pb.renderBucketOTRangeEnd, gGT->backBuffer, &viewport, (s16)(texX - (s16)entry->pb.renderBucketScreenPos),
 			                              (s16)(texY - (s16)(entry->pb.renderBucketScreenPos >> 16)), 0, 0, 0, 0, 1);
