@@ -114,6 +114,7 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 	b32 interpLessThanOriginal;
 	b32 wInterpLessThanZero;
 	s16 forwardDir;
+	int frameAdvance;
 	int rotCurrW_interp;
 	s8 simpTurnState;
 	s16 driftAngleCurr_og;
@@ -121,6 +122,11 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 	PhysLerpRot(driver, 0);
 
 	elapsedTimeMS = sdata->gGT->elapsedTimeMS;
+#if defined(CTR_NATIVE)
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	frameAdvance = 1;
+#endif
 	actionsFlagSet = driver->actionsFlagSet;
 	forwardDir = driver->forwardDir;
 	simpTurnState = driver->simpTurnState;
@@ -328,7 +334,10 @@ void VehPhysGeneral_PhysAngular(struct Thread *thread, struct Driver *driver)
 
 		turnResistMinBitshift = CTR_MipsSra(CTR_MipsMulLo(driver->const_SteerAccelTurnVelScale, turnResistMinBitshift), 8);
 
-		driver->numFramesSpentSteering = (s16)CTR_MipsAddLo((u16)driver->numFramesSpentSteering, 1);
+		if (frameAdvance > 0)
+		{
+			driver->numFramesSpentSteering = (s16)CTR_MipsAddLo((u16)driver->numFramesSpentSteering, frameAdvance);
+		}
 
 		// the higher the value of turnResistMaxBitshift the more steering is "locked up"
 		// try setting mov r3, xxxx at 80060170 for proof

@@ -1190,6 +1190,8 @@ static int RenderBucket_AcceptProjectedBounds(const struct RenderBucketBounds *b
 static void RenderBucket_GetViewPosition(struct Instance *inst, struct PushBuffer *pb, VECTOR *viewPos)
 {
 	VECTOR pos;
+	Vec3 renderPos;
+	SVec3 renderRot;
 
 	if ((inst->flags & SCREENSPACE_INSTANCE) != 0)
 	{
@@ -1199,9 +1201,10 @@ static void RenderBucket_GetViewPosition(struct Instance *inst, struct PushBuffe
 		return;
 	}
 
-	pos.vx = RenderBucket_MipsSub(inst->matrix.t[0], pb->pos.x);
-	pos.vy = RenderBucket_MipsSub(inst->matrix.t[1], pb->pos.y);
-	pos.vz = RenderBucket_MipsSub(inst->matrix.t[2], pb->pos.z);
+	PushBuffer_GetNativeRenderCameraState(pb, &renderPos, &renderRot);
+	pos.vx = RenderBucket_MipsSub(inst->matrix.t[0], renderPos.x);
+	pos.vy = RenderBucket_MipsSub(inst->matrix.t[1], renderPos.y);
+	pos.vz = RenderBucket_MipsSub(inst->matrix.t[2], renderPos.z);
 	RenderBucket_StoreRawViewScratch(&pos);
 
 	// NOTE(aalhendi): Source-backs QueueDraw's view-space position transform at
@@ -1881,7 +1884,13 @@ static void RenderBucket_StoreInstanceAnimWord(struct Instance *inst, int frame)
 
 static void RenderBucket_AdvanceInstanceAnimWord(struct Instance *inst, int gameMode1, int playerIndex, int lastFrame, u32 *queuedFlags)
 {
+	int advanceCount = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 	int frame;
+
+	if (advanceCount <= 0)
+	{
+		return;
+	}
 
 	if (gameMode1 != 0)
 	{
@@ -1906,41 +1915,43 @@ static void RenderBucket_AdvanceInstanceAnimWord(struct Instance *inst, int game
 
 	frame = (u16)inst->animFrame;
 
-	if ((*queuedFlags & 0x20) == 0)
+	while (advanceCount-- > 0)
 	{
-		if (RenderBucket_MipsSub(lastFrame, frame) > 0)
+		if ((*queuedFlags & 0x20) == 0)
 		{
-			frame = RenderBucket_MipsAdd(frame, 1);
+			if (RenderBucket_MipsSub(lastFrame, frame) > 0)
+			{
+				frame = RenderBucket_MipsAdd(frame, 1);
+			}
+			else
+			{
+				frame = 0;
+			}
 		}
-		else
-		{
-			frame = 0;
-		}
-	}
 
-	else if ((*queuedFlags & 0x10) != 0)
-	{
-		if (RenderBucket_MipsSub(lastFrame, frame) > 0)
+		else if ((*queuedFlags & 0x10) != 0)
 		{
-			frame = RenderBucket_MipsAdd(frame, 1);
+			if (RenderBucket_MipsSub(lastFrame, frame) > 0)
+			{
+				frame = RenderBucket_MipsAdd(frame, 1);
+			}
+			else
+			{
+				*queuedFlags &= ~0x10;
+				frame = RenderBucket_MipsAdd(lastFrame, -1);
+			}
 		}
 		else
 		{
-			*queuedFlags &= ~0x10;
-			frame = RenderBucket_MipsAdd(lastFrame, -1);
-		}
-	}
-
-	else
-	{
-		if (frame > 0)
-		{
-			frame = RenderBucket_MipsAdd(frame, -1);
-		}
-		else
-		{
-			*queuedFlags |= 0x10;
-			frame = 1;
+			if (frame > 0)
+			{
+				frame = RenderBucket_MipsAdd(frame, -1);
+			}
+			else
+			{
+				*queuedFlags |= 0x10;
+				frame = 1;
+			}
 		}
 	}
 

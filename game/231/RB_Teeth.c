@@ -69,10 +69,12 @@ void RB_Teeth_ThTick(struct Thread *t)
 	struct Teeth *teeth;
 	struct Instance *inst;
 	struct GameTracker *gGT;
+	int frameAdvance;
 
 	gGT = sdata->gGT;
 	teeth = t->object;
 	inst = t->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 	struct ScratchpadStruct *sps = CTR_SCRATCHPAD_PTR(struct ScratchpadStruct, 0x108);
 
 	// if door is not moving
@@ -111,7 +113,10 @@ void RB_Teeth_ThTick(struct Thread *t)
 	else
 	{
 		// modify animation index by direction
-		inst->animFrame = inst->animFrame + teeth->direction;
+		if (frameAdvance > 0)
+		{
+			inst->animFrame = inst->animFrame + (teeth->direction * frameAdvance);
+		}
 
 		int numAnimFrames = VehFrameInst_GetNumAnimFrames(inst, 0);
 

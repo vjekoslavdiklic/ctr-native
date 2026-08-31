@@ -4,9 +4,16 @@
 void RB_Explosion_ThTick(struct Thread *t)
 {
 	struct Instance *inst = t->inst;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	int frame = inst->animFrame;
 	int total = INSTANCE_GetNumAnimFrames(inst, 0);
+
+	if (frameAdvance <= 0)
+	{
+		ThTick_FastRET(t);
+		return;
+	}
 
 	if ((frame + 1) < total)
 	{

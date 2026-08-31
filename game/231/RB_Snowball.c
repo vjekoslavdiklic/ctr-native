@@ -10,11 +10,13 @@ void RB_Snowball_ThTick(struct Thread *t)
 	int modelID;
 	int soundID;
 	int pointIndex;
+	int frameAdvance;
 	struct SpawnType2 *ptrSpawnType2;
 	const struct SpawnPosRot *frame;
 
 	snowInst = t->inst;
 	snowObj = (struct Snowball *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	modelID = snowInst->model->id;
 
@@ -55,7 +57,10 @@ void RB_Snowball_ThTick(struct Thread *t)
 		RB_Minecart_CheckColl(snowInst, t);
 	}
 
-	snowObj->pointIndex = (snowObj->pointIndex + 1) % (snowObj->numPoints * 2);
+	if (frameAdvance > 0)
+	{
+		snowObj->pointIndex = (snowObj->pointIndex + 1) % (snowObj->numPoints * 2);
+	}
 }
 
 void RB_Snowball_LInB(struct Instance *inst)

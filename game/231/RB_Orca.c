@@ -106,14 +106,19 @@ void RB_Orca_ThTick(struct Thread *t)
 	int pathFrame;
 	int denominator;
 	int nextFrame;
+	int frameAdvance;
 	s16 direction;
 
 	orcaObj = (struct Orca *)t->object;
 	orcaInst = t->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if (orcaObj->cooldown != 0)
 	{
-		orcaObj->cooldown--;
+		if (frameAdvance > 0)
+		{
+			orcaObj->cooldown--;
+		}
 
 		if ((u16)orcaObj->cooldown != 0)
 		{
@@ -158,7 +163,7 @@ void RB_Orca_ThTick(struct Thread *t)
 
 	nextFrame = orcaInst->animFrame + 1;
 
-	if (nextFrame < orcaObj->numFrames)
+	if ((frameAdvance > 0) && (nextFrame < orcaObj->numFrames))
 	{
 		gGT = sdata->gGT;
 
@@ -178,6 +183,10 @@ void RB_Orca_ThTick(struct Thread *t)
 			orcaObj->animIndex++;
 		}
 
+		return;
+	}
+	else if (frameAdvance <= 0)
+	{
 		return;
 	}
 

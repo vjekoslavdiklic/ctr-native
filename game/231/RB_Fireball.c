@@ -137,9 +137,11 @@ void RB_Fireball_ThTick(struct Thread *t)
 
 	struct GameTracker *gGT;
 	int elapsedTimeMS;
+	int frameAdvance;
 
 	gGT = sdata->gGT;
 	elapsedTimeMS = gGT->elapsedTimeMS;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	fireInst = t->inst;
 	fireObj = t->object;
@@ -220,14 +222,14 @@ void RB_Fireball_ThTick(struct Thread *t)
 	fireObj->cycleTimer -= elapsedTimeMS;
 
 	// if animation is not over
-	if ((fireInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(fireInst, 0))
+	if ((frameAdvance > 0) && ((fireInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(fireInst, 0)))
 	{
 		// increment frame
 		fireInst->animFrame = fireInst->animFrame + 1;
 	}
 
 	// if animation ended
-	else
+	else if (frameAdvance > 0)
 	{
 		// reset
 		fireInst->animFrame = 0;

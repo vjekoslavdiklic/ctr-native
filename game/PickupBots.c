@@ -92,6 +92,15 @@ CTR_STATIC_ASSERT(PICKUPBOTS_BOSS_CHECKPOINT_DISTANCE_SHIFT == 3);
 CTR_STATIC_ASSERT(PICKUPBOTS_UPDATE_START_DELAY == 0x4b00);
 CTR_STATIC_ASSERT(PICKUPBOTS_UPDATE_NEGATIVE_MODE_START_DELAY == 0x12c0);
 
+static int PickupBots_GetLegacyFrameAdvance(void)
+{
+#if defined(CTR_NATIVE)
+	return CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	return 1;
+#endif
+}
+
 static int PickupBots_IsBotWeaponReady(struct Driver *driver)
 {
 #if defined(CTR_NATIVE)
@@ -324,12 +333,14 @@ static void PickupBots_AdvanceBossMeta(struct Driver *boss)
 
 static void PickupBots_UpdateBossPathRequest(struct Driver *boss)
 {
+	int frameAdvance = PickupBots_GetLegacyFrameAdvance();
+
 	if (sdata->bossWeaponMeta->pathChangeDisabled != 0)
 	{
 		return;
 	}
 
-	if (sdata->bossPathRequestTimer == PICKUPBOTS_BOSS_PATH_REQUEST_FRAMES)
+	if (sdata->bossPathRequestTimer >= PICKUPBOTS_BOSS_PATH_REQUEST_FRAMES)
 	{
 		if ((boss->botData.botFlags & BOT_FLAG_BOSS_PATH_ACTIVE) != 0)
 		{
@@ -369,9 +380,14 @@ static void PickupBots_UpdateBossPathRequest(struct Driver *boss)
 			}
 		}
 	}
-	else if ((boss->botData.botFlags & BOT_FLAG_BOSS_PATH_REQUESTED) == 0)
+	else if ((frameAdvance > 0) && ((boss->botData.botFlags & BOT_FLAG_BOSS_PATH_REQUESTED) == 0))
 	{
-		sdata->bossPathRequestTimer++;
+		int nextTimer = sdata->bossPathRequestTimer + frameAdvance;
+		if (nextTimer > PICKUPBOTS_BOSS_PATH_REQUEST_FRAMES)
+		{
+			nextTimer = PICKUPBOTS_BOSS_PATH_REQUEST_FRAMES;
+		}
+		sdata->bossPathRequestTimer = (s16)nextTimer;
 	}
 }
 
@@ -471,6 +487,7 @@ static void PickupBots_UpdateBoss(void)
 	struct Driver *boss = gGT->drivers[1];
 	struct Driver *player = gGT->drivers[0];
 	struct MetaDataBOSS *bossMeta = sdata->bossWeaponMeta;
+	int frameAdvance = PickupBots_GetLegacyFrameAdvance();
 
 	if (((boss->botData.botFlags & BOT_FLAG_DAMAGE_ACTIVE) != 0) || ((boss->actionsFlagSet & ACTION_RACE_FINISHED) != 0) || (boss->instTntRecv != NULL) ||
 	    (boss->clockReceive != 0) || (boss->botData.aiPhysics.speedLinear < PICKUPBOTS_BOSS_SPEED_MIN))
@@ -484,9 +501,13 @@ static void PickupBots_UpdateBoss(void)
 
 	PickupBots_UpdateBossPathRequest(boss);
 
-	if (sdata->bossWeaponCooldown > 0)
+	if ((frameAdvance > 0) && (sdata->bossWeaponCooldown > 0))
 	{
-		sdata->bossWeaponCooldown--;
+		sdata->bossWeaponCooldown -= frameAdvance;
+		if (sdata->bossWeaponCooldown < 0)
+		{
+			sdata->bossWeaponCooldown = 0;
+		}
 		return;
 	}
 

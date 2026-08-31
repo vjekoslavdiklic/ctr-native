@@ -488,7 +488,7 @@ void BOTS_UpdateGlobals(void)
 		sdata->bestHumanRank = worstRobotDriver;
 	}
 
-	sdata->aiCollisionDelayFrameCount++;
+	sdata->aiCollisionDelayFrameCount += CTR_60HzMode_GetLegacyFrameAdvanceCount();
 }
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80013444-0x800135d8
@@ -831,6 +831,13 @@ void BOTS_ThTick_Drive(struct Thread *botThread)
 	struct Driver *botDriver = (struct Driver *)botThread->object;     // iVar17
 	struct Instance *botInstance = (struct Instance *)botThread->inst; // iVar22
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance;
+
+#if defined(CTR_NATIVE)
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	frameAdvance = 1;
+#endif
 
 	// local_34 = gGT->elapsedTimeMS;
 
@@ -844,16 +851,24 @@ void BOTS_ThTick_Drive(struct Thread *botThread)
 
 	botInstance->flags &= ~(SPLIT_LINE | REFLECTIVE);
 
-	if (botDriver->botData.weaponCooldown != 0)
+	if ((frameAdvance > 0) && (botDriver->botData.weaponCooldown != 0))
 	{
-		botDriver->botData.weaponCooldown = (s16)CTR_MipsSubLo((u16)botDriver->botData.weaponCooldown, 1);
+		botDriver->botData.weaponCooldown = (s16)CTR_MipsSubLo((u16)botDriver->botData.weaponCooldown, frameAdvance);
+		if (botDriver->botData.weaponCooldown < 0)
+		{
+			botDriver->botData.weaponCooldown = 0;
+		}
 	}
 
 	if (botDriver->pendingDamageType == 0)
 	{
-		if (((botDriver->actionsFlagSet & ACTION_RACE_FINISHED) == 0) && (botDriver->botData.weaponCooldown != 0))
+		if ((frameAdvance > 0) && ((botDriver->actionsFlagSet & ACTION_RACE_FINISHED) == 0) && (botDriver->botData.weaponCooldown != 0))
 		{
-			botDriver->botData.weaponCooldown = (s16)CTR_MipsSubLo((u16)botDriver->botData.weaponCooldown, 1);
+			botDriver->botData.weaponCooldown = (s16)CTR_MipsSubLo((u16)botDriver->botData.weaponCooldown, frameAdvance);
+			if (botDriver->botData.weaponCooldown < 0)
+			{
+				botDriver->botData.weaponCooldown = 0;
+			}
 		}
 	}
 	else
@@ -1589,7 +1604,7 @@ UpdateTireColorTimer:
 
 		botDriver->botData.aiPhysics.speedLinear = 0;
 
-		if (botDriver->botData.ai_progress_cooldown != 0)
+		if ((CTR_60HzMode_GetLegacyFrameAdvanceCount() > 0) && (botDriver->botData.ai_progress_cooldown != 0))
 		{
 			botDriver->botData.ai_progress_cooldown--;
 		}

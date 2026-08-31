@@ -1,5 +1,11 @@
 #include <common.h>
 
+enum
+{
+	CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP = 4,
+	CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO = 0x30,
+};
+
 
 enum
 {
@@ -1483,6 +1489,24 @@ LAB_8001ab04:
 		cam->delta.y = cam->pos.y + (s32) * (s16 *)((s32)cDC + 0xc8);
 	}
 
+#if defined(CTR_NATIVE)
+	if (
+	    CTR_60HzMode_IsEnabled(gGT) &&
+	    (d->kartState != KS_MASK_GRABBED) &&
+	    ((cDC->flags & CAMERA_FLAG_DIRECTION_CHANGED) == 0) &&
+	    (cDC->BlastedLerp.boolLerpPending == 0) &&
+	    (cDC->BlastedLerp.framesRemaining == 0))
+	{
+		cam->pos.x = CAM_FollowDriver_AngleAxis_Lerp256(cam->pos.x, cDC->cameraPos.x, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+		cam->pos.y = CAM_FollowDriver_AngleAxis_Lerp256(cam->pos.y, cDC->cameraPos.y, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+		cam->pos.z = CAM_FollowDriver_AngleAxis_Lerp256(cam->pos.z, cDC->cameraPos.z, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+
+		cam->delta.x = CAM_FollowDriver_AngleAxis_Lerp256(cam->delta.x, cDC->lookAtPos.x, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+		cam->delta.y = CAM_FollowDriver_AngleAxis_Lerp256(cam->delta.y, cDC->lookAtPos.y, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+		cam->delta.z = CAM_FollowDriver_AngleAxis_Lerp256(cam->delta.z, cDC->lookAtPos.z, CAM_NATIVE_60HZ_FOLLOW_BLEND_RATIO);
+	}
+#endif
+
 	if (d->kartState == KS_MASK_GRABBED)
 	{
 		pb->rot.z -= (pb->rot.z >> 3);
@@ -1537,30 +1561,30 @@ LAB_8001ab04:
 	cDC->pushBufferPosCorrection.y -= (cam->pos.y - cDC->cameraPos.y);
 	cDC->pushBufferPosCorrection.z -= (cam->pos.z - cDC->cameraPos.z);
 
-	if (cDC->pushBufferPosCorrection.x > 2)
+	if (cDC->pushBufferPosCorrection.x > CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.x = 2;
+		cDC->pushBufferPosCorrection.x = CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
-	if (cDC->pushBufferPosCorrection.y > 2)
+	if (cDC->pushBufferPosCorrection.y > CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.y = 2;
+		cDC->pushBufferPosCorrection.y = CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
-	if (cDC->pushBufferPosCorrection.z > 2)
+	if (cDC->pushBufferPosCorrection.z > CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.z = 2;
+		cDC->pushBufferPosCorrection.z = CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
 
-	if (cDC->pushBufferPosCorrection.x < -2)
+	if (cDC->pushBufferPosCorrection.x < -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.x = -2;
+		cDC->pushBufferPosCorrection.x = -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
-	if (cDC->pushBufferPosCorrection.y < -2)
+	if (cDC->pushBufferPosCorrection.y < -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.y = -2;
+		cDC->pushBufferPosCorrection.y = -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
-	if (cDC->pushBufferPosCorrection.z < -2)
+	if (cDC->pushBufferPosCorrection.z < -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP)
 	{
-		cDC->pushBufferPosCorrection.z = -2;
+		cDC->pushBufferPosCorrection.z = -CAM_NATIVE_PUSHBUFFER_CORRECTION_CLAMP;
 	}
 
 	if (d->kartState != KS_MASK_GRABBED)

@@ -25,6 +25,90 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 		NativeGpuLinks_RegisterRangeChecked(swapchainLabels[i], gGT->otSwapchainDB[i], swapchainOTBytes);
 	}
 }
+
+static int s_native60HzLegacyFrameAdvanceCount = 1;
+static int s_native60HzLegacyVblankCarry = 0;
+static int s_native60HzPrevVblankCounter = -1;
+
+b32 CTR_60HzMode_IsEnabled(const struct GameTracker *gGT)
+{
+	if (gGT == NULL)
+	{
+		return false;
+	}
+
+	if (gGT->numPlyrCurrGame != 1)
+	{
+		return false;
+	}
+
+	if (gGT->boolDemoMode != 0)
+	{
+		return false;
+	}
+
+	if (gGT->levelID >= NITRO_COURT)
+	{
+		return false;
+	}
+
+	if ((gGT->gameMode1 & (LOADING | START_OF_RACE | PAUSE_ALL | GAME_CUTSCENE | ADVENTURE_ARENA | END_OF_RACE | MAIN_MENU)) != 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void CTR_60HzMode_BeginFrame(struct GameTracker *gGT)
+{
+	int currentVblankCounter;
+	int deltaVblanks;
+
+	if (!CTR_60HzMode_IsEnabled(gGT))
+	{
+		s_native60HzLegacyFrameAdvanceCount = 1;
+		s_native60HzLegacyVblankCarry = 0;
+		s_native60HzPrevVblankCounter = -1;
+		return;
+	}
+
+	currentVblankCounter = gGT->frameTimer_VsyncCallback;
+	if (s_native60HzPrevVblankCounter < 0)
+	{
+		s_native60HzPrevVblankCounter = currentVblankCounter - 1;
+	}
+
+	deltaVblanks = currentVblankCounter - s_native60HzPrevVblankCounter;
+	if (deltaVblanks < 1)
+	{
+		deltaVblanks = 1;
+	}
+	if (deltaVblanks > 4)
+	{
+		deltaVblanks = 4;
+	}
+
+	s_native60HzPrevVblankCounter = currentVblankCounter;
+	s_native60HzLegacyVblankCarry += deltaVblanks;
+	s_native60HzLegacyFrameAdvanceCount = s_native60HzLegacyVblankCarry >> 1;
+	s_native60HzLegacyVblankCarry &= 1;
+
+	if (s_native60HzLegacyFrameAdvanceCount > 1)
+	{
+		s_native60HzLegacyFrameAdvanceCount = 1;
+	}
+}
+
+int CTR_60HzMode_GetLegacyFrameAdvanceCount(void)
+{
+	return s_native60HzLegacyFrameAdvanceCount;
+}
+
+int CTR_60HzMode_GetFlipVsyncs(const struct GameTracker *gGT)
+{
+	return CTR_60HzMode_IsEnabled(gGT) ? 1 : 2;
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80034b48-0x80034bbc.
@@ -131,19 +215,30 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 	struct PushBuffer *pushBuffer;
 	int iVar11;
 	struct Thread *psVar12;
+	int legacyFrameAdvance;
 
 	wasPausedAtFrameStart = true;
 	if ((gGT->gameMode1 & PAUSE_ALL) == 0)
 	{
 		wasPausedAtFrameStart = false;
+#if defined(CTR_NATIVE)
+		legacyFrameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+		legacyFrameAdvance = 1;
+#endif
 		pushBuffer = gGT->pushBuffer;
 		for (psVar12 = gGT->threadBuckets[0].thread; psVar12 != 0; psVar12 = psVar12->siblingThread)
 		{
 			psVar9 = (struct Driver *)psVar12->object;
 
-			if (psVar9->clockSend)
+			if ((legacyFrameAdvance > 0) && psVar9->clockSend)
 			{
-				psVar9->clockSend--;
+				int nextClockSend = CTR_MipsSubLo(psVar9->clockSend, legacyFrameAdvance);
+				if (nextClockSend < 0)
+				{
+					nextClockSend = 0;
+				}
+				psVar9->clockSend = (u8)nextClockSend;
 			}
 			uVar3 = psVar9->clockFlash;
 			if (uVar3 == 0)
@@ -178,13 +273,21 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 #if defined(CTR_NATIVE)
 				DISPLAY_Blur_Main(pushBuffer, -uVar3);
 #endif
-				psVar9->clockFlash--;
+				if (legacyFrameAdvance > 0)
+				{
+					int nextClockFlash = CTR_MipsSubLo(psVar9->clockFlash, legacyFrameAdvance);
+					if (nextClockFlash < 0)
+					{
+						nextClockFlash = 0;
+					}
+					psVar9->clockFlash = (char)nextClockFlash;
+				}
 			}
 		LAB_80034e74:
 			pushBuffer = pushBuffer + 1;
 		}
-		gGT->timer = gGT->timer + 1;
-		gGT->framesInThisLEV = gGT->framesInThisLEV + 1;
+		gGT->timer += CTR_60HzMode_GetLegacyFrameAdvanceCount();
+		gGT->framesInThisLEV += CTR_60HzMode_GetLegacyFrameAdvanceCount();
 		gGT->unk1cc4[4] = 0;
 
 		iVar4 = Timer_GetTime_Elapsed(gGT->clockFrameStart, &gGT->clockFrameStart);
@@ -376,6 +479,26 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 	}
 
 	PROC_CheckAllForDead();
+
+	if (sdata->Loading.stage == LOAD_IDLE)
+	{
+		if ((gGT->gameMode1 & PAUSE_ALL) == 0)
+		{
+			PickupBots_Update();
+		}
+
+#if defined(CTR_NATIVE)
+		// NOTE(aalhendi): Native menu/adventure-hub LEVs may publish no
+		// restart table. Retail lap stats assume the table exists whenever
+		// gameplay reaches them; keep the ASM-verified lap function intact.
+		if ((gGT->level1 != NULL) && (gGT->level1->ptr_restart_points != NULL) && (gGT->level1->cnt_restart_points != 0))
+		{
+			PlayLevel_UpdateLapStats();
+		}
+#else
+		PlayLevel_UpdateLapStats();
+#endif
+	}
 
 	if ((gGT->gameMode1 & PAUSE_ALL) == 0)
 	{

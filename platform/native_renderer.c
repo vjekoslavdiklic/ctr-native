@@ -40,8 +40,12 @@ extern SDL_Window *g_window;
 
 #define MAX_NUM_VERTEX_BUFFERS          (2)
 #define PSX_SCREEN_ASPECT               (240.0f / 320.0f) // PSX screen is mapped always to this aspect
-#define NATIVE_ENGINE_RENDER_WIDTH_4K   (3840)
-#define NATIVE_ENGINE_RENDER_HEIGHT_4K  (2160)
+#define NATIVE_ENGINE_RENDER_WIDTH_4K            (3840)
+#define NATIVE_ENGINE_RENDER_HEIGHT_4K           (2160)
+#define NATIVE_ENGINE_RENDER_SCALE_NUM           (3)
+#define NATIVE_ENGINE_RENDER_SCALE_DEN           (2)
+#define NATIVE_ENGINE_RENDER_MAX_WIDTH           (7680)
+#define NATIVE_ENGINE_RENDER_MAX_HEIGHT          (4320)
 
 #if defined(CTR_INTERNAL)
 #ifndef GL_TIME_ELAPSED
@@ -133,7 +137,7 @@ global_variable SDL_Rect s_presentViewport = {0, 0, 0, 0};
 int g_dbg_wireframeMode = 0;
 int g_dbg_texturelessMode = 0;
 
-int g_cfg_bilinearFiltering = 0;
+int g_cfg_bilinearFiltering = 1;
 
 // NOTE(aalhendi): Pack native RGBA render targets into the persistent RG8 VRAM
 // texture on the GPU instead of a GPU-to-CPU-to-GPU round trip.
@@ -160,7 +164,7 @@ internal void NativeRenderer_DestroyRenderTarget(struct NativeRenderTarget *targ
 internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *target, int width, int height);
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y);
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int sourceWidth, int sourceHeight);
 internal void NativeRenderer_GetMainTargetSize(int logicalWidth, int logicalHeight, int *targetWidth, int *targetHeight);
 internal int NativeRenderer_ScaleAxisFloor(int value, int logicalExtent, int targetExtent);
 internal int NativeRenderer_ScaleAxisCeil(int value, int logicalExtent, int targetExtent);
@@ -354,7 +358,9 @@ void NativeRenderer_BeginScene(void)
 	NativeRenderer_UpdateVRAM();
 	if (!activeDrawEnv.isbg)
 	{
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y);
+		const int sourceWidth = activeDispEnv.disp.w > 0 ? activeDispEnv.disp.w : activeDrawEnv.clip.w;
+		const int sourceHeight = activeDispEnv.disp.h > 0 ? activeDispEnv.disp.h : activeDrawEnv.clip.h;
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y, sourceWidth, sourceHeight);
 	}
 	else
 	{
@@ -479,6 +485,19 @@ internal void NativeRenderer_GetMainTargetSize(int logicalWidth, int logicalHeig
 		height = 1;
 	}
 
+	width = (int)((((s64)width * NATIVE_ENGINE_RENDER_SCALE_NUM) + NATIVE_ENGINE_RENDER_SCALE_DEN - 1) / NATIVE_ENGINE_RENDER_SCALE_DEN);
+	height = (int)((((s64)height * NATIVE_ENGINE_RENDER_SCALE_NUM) + NATIVE_ENGINE_RENDER_SCALE_DEN - 1) / NATIVE_ENGINE_RENDER_SCALE_DEN);
+
+	if (width > NATIVE_ENGINE_RENDER_MAX_WIDTH)
+	{
+		width = NATIVE_ENGINE_RENDER_MAX_WIDTH;
+	}
+
+	if (height > NATIVE_ENGINE_RENDER_MAX_HEIGHT)
+	{
+		height = NATIVE_ENGINE_RENDER_MAX_HEIGHT;
+	}
+
 	*targetWidth = width;
 	*targetHeight = height;
 }
@@ -546,8 +565,10 @@ internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target)
 	target->texture = (TextureID)-1;
 	glGenTextures(1, &target->texture);
 	glBindTexture(GL_TEXTURE_2D, target->texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -630,7 +651,7 @@ internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height)
 	NativeRenderer_DrawTriangles(0, 2);
 }
 
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y)
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int sourceWidth, int sourceHeight)
 {
 	const ShaderID previousShader = s_previousShader;
 	const TextureID previousTexture = s_lastBoundTexture;
@@ -643,7 +664,11 @@ internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget 
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glViewport(0, 0, target->width, target->height);
-	NativeRenderer_DrawVRAMRegion(x, y, target->width, target->height);
+	// The host target may be supersampled, but its backing VRAM rectangle is
+	// always in PSX pixels. Using target dimensions here makes a small DecalMP
+	// capture (Wumpa HUD and remote-kart decals) read a much larger, unrelated
+	// VRAM area before it is packed back into the requested viewport.
+	NativeRenderer_DrawVRAMRegion(x, y, sourceWidth, sourceHeight);
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_STENCIL_TEST);
 
@@ -818,9 +843,14 @@ GLint u_psxTextureOutputStpLoc;
 	"		+2.0,  -2.0,  +3.0,  -1.0,\n"                              \
 	"		-3.0,  +1.0,  -4.0,  +0.0,\n"                              \
 	"		+3.0,  -1.0,  +2.0,  -2.0) / 255.0;\n"                     \
+	"	#ifdef BILINEAR_FILTER\n"                                     \
+	"	const float c_ditherStrength = 0.35;\n"                       \
+	"	#else\n"                                                       \
+	"	const float c_ditherStrength = 1.0;\n"                        \
+	"	#endif\n"                                                      \
 	"	vec4 dither(vec4 color) {\n"                                \
 	"		ivec2 dc = ivec2(mod(floor(v_ditherCoord), 4.0));\n"       \
-	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w);\n" \
+	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w * c_ditherStrength);\n" \
 	"		return color;\n"                                           \
 	"	}\n"
 
@@ -1140,7 +1170,9 @@ global_variable const char *ctr_pack_shader = "#ifdef VERTEX\n"
                                               "varying vec2 v_uv;\n"
                                               "uniform sampler2D s_src;\n"
                                               "void main() {\n"
-                                              "	ivec4 c = ivec4(texture2D(s_src, v_uv) * 255.0 + 0.5);\n"
+                                              "	ivec2 srcSize = textureSize(s_src, 0);\n"
+                                              "	ivec2 srcPixel = clamp(ivec2(v_uv * vec2(srcSize)), ivec2(0), srcSize - ivec2(1));\n"
+                                              "	ivec4 c = ivec4(texelFetch(s_src, srcPixel, 0) * 255.0 + 0.5);\n"
                                               "	int px16 = (c.r >> 3) | ((c.g >> 3) << 5) | ((c.b >> 3) << 10) | ((c.a >> 7) << 15);\n"
                                               "	fragColor = vec4(float(px16 & 0xFF) / 255.0, float((px16 >> 8) & 0xFF) / 255.0, 0.0, 0.0);\n"
                                               "}\n"
@@ -1996,7 +2028,8 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 
 		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, scaledW, scaledH);
 		s_previousOffscreen = *offscreenRect;
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y);
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y, offscreenRect->w,
+		                                      offscreenRect->h);
 	}
 	else
 	{

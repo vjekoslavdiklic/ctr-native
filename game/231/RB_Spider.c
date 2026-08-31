@@ -155,20 +155,28 @@ void RB_Spider_ThTick(struct Thread *t)
 	struct Driver *victim;
 	struct Instance *spiderInst;
 	struct Spider *spider;
+	int frameAdvance;
 
 	spider = t->object;
 	spiderInst = t->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if (spider->delay != 0)
 	{
-		spider->delay--;
+		if (frameAdvance > 0)
+		{
+			spider->delay--;
+		}
 		return;
 	}
 
-	spider->unused++;
+	if (frameAdvance > 0)
+	{
+		spider->unused++;
+	}
 
 	// If spider is on ground
-	if (spider->isNearRoof == 0)
+	if ((frameAdvance > 0) && (spider->isNearRoof == 0))
 	{
 		if (4 < spider->animLoopCount)
 		{
@@ -215,7 +223,7 @@ void RB_Spider_ThTick(struct Thread *t)
 	}
 
 	// if spider is near ceiling
-	else
+	else if ((frameAdvance > 0) && (spider->isNearRoof != 0))
 	{
 		if (4 < spider->animLoopCount)
 		{
@@ -266,7 +274,10 @@ void RB_Spider_ThTick(struct Thread *t)
 		}
 	}
 
-	spiderInst->animFrame++;
+	if (frameAdvance > 0)
+	{
+		spiderInst->animFrame++;
+	}
 
 checkCollision:
 	gGT = sdata->gGT;

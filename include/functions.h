@@ -372,6 +372,13 @@ void MainDB_PrimMem(struct PrimMem *primMem, u32 size);
 void MainDrawCb_Vsync(void);
 void MainDrawCb_DrawSync(void);
 
+#if defined(CTR_NATIVE)
+b32 CTR_60HzMode_IsEnabled(const struct GameTracker *gGT);
+void CTR_60HzMode_BeginFrame(struct GameTracker *gGT);
+int CTR_60HzMode_GetLegacyFrameAdvanceCount(void);
+int CTR_60HzMode_GetFlipVsyncs(const struct GameTracker *gGT);
+#endif
+
 void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepads);
 void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamepads);
 void DrawUnpluggedMsg(struct GameTracker *gGT, struct GamepadSystem *gGamepads);
@@ -606,6 +613,7 @@ void PushBuffer_Init(struct PushBuffer *pb, int id, int total);
 void PushBuffer_UpdateFrustum(struct PushBuffer *pb);
 #if defined(CTR_NATIVE)
 s32 PushBuffer_GetFrustumSavedCameraZ(void);
+void PushBuffer_GetNativeRenderCameraState(const struct PushBuffer *pb, Vec3 *pos, SVec3 *rot);
 #endif
 void PushBuffer_SetPsyqGeom(struct PushBuffer *pb);
 void PushBuffer_SetMatrixVP(struct PushBuffer *pb);

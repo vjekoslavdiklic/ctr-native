@@ -195,25 +195,29 @@ void RB_MaskWeapon_ThTick(struct Thread *maskTh)
 	}
 
 	// === Animation ===
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	// get animFrame
 	numAnimFrames = INSTANCE_GetNumAnimFrames(maskBeamInst, 0);
 
 	// if animation is not finished
-	if ((int)maskBeamInst->animFrame < numAnimFrames - 1)
+	if ((frameAdvance > 0) && ((int)maskBeamInst->animFrame < numAnimFrames - 1))
 	{
 		// increment animation frame
 		maskBeamInst->animFrame += 1;
 	}
 	// if animation is finished
-	else
+	else if (frameAdvance > 0)
 	{
 		// restart animation
 		maskBeamInst->animFrame = 0;
 	}
 
 	// adjust rotation
-	mask->rot.y += -0x100;
+	if (frameAdvance > 0)
+	{
+		mask->rot.y += -0x100;
+	}
 
 	// If duration is over
 	if (mask->duration == 0)
@@ -261,11 +265,13 @@ void RB_ShieldDark_ThTick_Pop(struct Thread *t)
 	struct Instance *instColor;
 	struct Driver *driverOwner;
 	SVec3 rot;
+	int frameAdvance;
 
 	sh = t->object;
 	instDark = t->inst;
 	instColor = sh->instColor;
 	driverOwner = t->parentThread->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	rot.x = 0;
 	rot.y = 0;
@@ -294,7 +300,7 @@ void RB_ShieldDark_ThTick_Pop(struct Thread *t)
 		instColor->scale.z = s_shieldPopScale[animFrame][0];
 
 		// next frame
-		sh->animFrame += 1;
+		sh->animFrame += frameAdvance;
 
 		return;
 	}
@@ -341,11 +347,15 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	struct Thread *playerTh = th->parentThread;
 	struct Driver *player = playerTh->object;
 	struct Instance *driverInst = playerTh->inst;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	// if highlight cooldown is gone
 	if (shield->highlightTimer == 0)
 	{
-		shield->highlightRot.y += 0x100;
+		if (frameAdvance > 0)
+		{
+			shield->highlightRot.y += 0x100;
+		}
 
 		highlightInst->flags &= ~HIDE_MODEL;
 
@@ -373,7 +383,10 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	else
 	{
 		// decrease counter, make invisible when this is zero
-		shield->highlightTimer--;
+		if (frameAdvance > 0)
+		{
+			shield->highlightTimer--;
+		}
 
 		highlightInst->flags |= HIDE_MODEL;
 
@@ -441,7 +454,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	s16 scaleY;
 
 	// if animation is not done
-	if (shield->animFrame < 8)
+	if ((frameAdvance > 0) && (shield->animFrame < 8))
 	{
 		scaleXZ = s_shieldGrowScale[shield->animFrame][0];
 		scaleY = s_shieldGrowScale[shield->animFrame][1];
@@ -457,7 +470,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		colorInst->scale.z = scaleXZ;
 
 		// next frame
-		shield->animFrame++;
+		shield->animFrame += frameAdvance;
 	}
 
 	// if animation is done
@@ -500,8 +513,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 			goto LAB_800b0d6c;
 		}
 
-		// subtract 32ms by hand
-		duration -= 32;
+		duration -= gGT->elapsedTimeMS;
 		shield->duration = duration;
 
 		// 2.0 seconds
@@ -628,10 +640,12 @@ void RB_RainCloud_FadeAway(struct Thread *t)
 	struct Instance *inst;
 	struct Instance *parentInst;
 	struct RainCloud *rcloud;
+	int frameAdvance;
 
 	inst = t->inst;
 	rcloud = t->object;
 	parentInst = t->parentThread->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	// offset upward before averaging
 	inst->matrix.t[1] += 0x80;
@@ -645,11 +659,17 @@ void RB_RainCloud_FadeAway(struct Thread *t)
 	}
 
 	struct RainLocal *rainLocal = rcloud->rainLocal;
-	rainLocal->frameCount -= 2;
+	if (frameAdvance > 0)
+	{
+		rainLocal->frameCount -= 2;
+	}
 
-	inst->scale.z += -0x100;
-	inst->scale.y += -0x100;
-	inst->scale.x += -0x100;
+	if (frameAdvance > 0)
+	{
+		inst->scale.z += -0x100;
+		inst->scale.y += -0x100;
+		inst->scale.x += -0x100;
+	}
 
 	if (inst->scale.x < 0)
 	{
@@ -672,6 +692,7 @@ void RB_RainCloud_ThTick(struct Thread *t)
 	struct Instance *dInst;
 
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance;
 
 	inst = t->inst;
 	rcloud = t->object;
@@ -681,19 +702,20 @@ void RB_RainCloud_ThTick(struct Thread *t)
 
 	d = driverTh->object;
 	dInst = driverTh->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	animFrame = inst->animFrame;
 	numFrames = INSTANCE_GetNumAnimFrames(inst, 0);
 
 	// if you have not reached the end of the animation
-	if ((int)animFrame < numFrames - 1)
+	if ((frameAdvance > 0) && ((int)animFrame < numFrames - 1))
 	{
 		// increment animation frame
 		inst->animFrame++;
 	}
 
 	// if animation is done
-	else
+	else if (frameAdvance > 0)
 	{
 		// restart animation
 		inst->animFrame = 0;

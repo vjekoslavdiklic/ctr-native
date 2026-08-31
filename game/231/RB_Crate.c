@@ -64,6 +64,12 @@ void RB_CrateAny_ThTick_Explode(struct Thread *t)
 	// it's own instance, thread, and object,
 	// separate from "solid" crate
 	struct Instance *crateExplodeInst = t->inst;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+
+	if (frameAdvance <= 0)
+	{
+		return;
+	}
 
 	// if explosion is not over
 	if ((crateExplodeInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(crateExplodeInst, 0))
@@ -135,10 +141,12 @@ void RB_CrateAny_ThTick_Grow(struct Thread *t)
 	struct Instance *crateInst;
 	struct Crate *crateObj;
 	int modelID;
+	int frameAdvance;
 
 	crateInst = t->inst;
 	crateObj = (struct Crate *)t->object;
 	modelID = crateInst->model->id;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if ((modelID == STATIC_TIME_CRATE_01) || (modelID == STATIC_TIME_CRATE_02) || (modelID == STATIC_TIME_CRATE_03))
 	{
@@ -154,7 +162,10 @@ void RB_CrateAny_ThTick_Grow(struct Thread *t)
 		if (crateObj->boolPauseCooldown == 0)
 		{
 			// reduce cooldown
-			crateObj->cooldown--;
+			if (frameAdvance > 0)
+			{
+				crateObj->cooldown--;
+			}
 		}
 
 		// dont procede until cooldown is done
@@ -163,7 +174,7 @@ void RB_CrateAny_ThTick_Grow(struct Thread *t)
 
 	// == ready to regrow ==
 
-	if (crateInst->scale.x < 0x1000)
+	if ((frameAdvance > 0) && (crateInst->scale.x < 0x1000))
 	{
 		crateInst->scale.x += 0x100;
 		crateInst->scale.y += 0x100;
@@ -177,7 +188,10 @@ void RB_CrateAny_ThTick_Grow(struct Thread *t)
 
 		// kill thread
 		crateInst->thread = 0;
-		crateInst->animFrame++;
+		if (frameAdvance > 0)
+		{
+			crateInst->animFrame++;
+		}
 		t->flags |= THREAD_FLAG_DEAD;
 	}
 }

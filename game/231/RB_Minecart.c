@@ -60,22 +60,24 @@ void RB_Minecart_ThTick(struct Thread *t)
 	struct Level *level;
 	struct SpawnType2 *spawnType2;
 	int numCoords;
+	int frameAdvance;
 
 	s16 i;
 
 	minecartInst = t->inst;
 	minecartObj = (struct Minecart *)t->object;
 	level = sdata->gGT->level1;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	// if animation is not over
-	if ((minecartInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(minecartInst, 0))
+	if ((frameAdvance > 0) && ((minecartInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(minecartInst, 0)))
 	{
 		// increment frame
 		minecartInst->animFrame = minecartInst->animFrame + 1;
 	}
 
 	// if animation is done
-	else
+	else if (frameAdvance > 0)
 	{
 		// reset animation
 		minecartInst->animFrame = 0;
@@ -91,13 +93,13 @@ void RB_Minecart_ThTick(struct Thread *t)
 	numCoords = spawnType2->numCoords;
 
 	// between two points
-	if (minecartObj->betweenPoints_currFrame < minecartObj->betweenPoints_numFrames)
+	if ((frameAdvance > 0) && (minecartObj->betweenPoints_currFrame < minecartObj->betweenPoints_numFrames))
 	{
 		minecartObj->betweenPoints_currFrame++;
 	}
 
 	// reached point
-	else
+	else if (frameAdvance > 0)
 	{
 		minecartObj->betweenPoints_currFrame = 1;
 
@@ -134,8 +136,11 @@ void RB_Minecart_ThTick(struct Thread *t)
 		    minecartObj->posStart.v[i] - ((minecartObj->betweenPoints_currFrame * minecartObj->dir.v[i]) / minecartObj->betweenPoints_numFrames);
 	}
 
-	minecartObj->rotCurr.y = RB_Hazard_InterpolateValue(minecartObj->rotCurr.y, minecartObj->rotDesired.y, minecartObj->rotSpeed);
-	minecartObj->rotCurr.x = RB_Hazard_InterpolateValue(minecartObj->rotCurr.x, minecartObj->rotDesired.x, minecartObj->rotSpeed);
+	if (frameAdvance > 0)
+	{
+		minecartObj->rotCurr.y = RB_Hazard_InterpolateValue(minecartObj->rotCurr.y, minecartObj->rotDesired.y, minecartObj->rotSpeed);
+		minecartObj->rotCurr.x = RB_Hazard_InterpolateValue(minecartObj->rotCurr.x, minecartObj->rotDesired.x, minecartObj->rotSpeed);
+	}
 
 	// converted to TEST in rebuildPS1
 	ConvertRotToMatrix(&minecartInst->matrix, &minecartObj->rotCurr);

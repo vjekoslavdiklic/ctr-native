@@ -20,11 +20,13 @@ void RB_MovingExplosive_ThTick(struct Thread *t)
 	struct Instance *inst;
 	SVec3 posA;
 	SVec3 posB;
+	int frameAdvance;
 
 	inst = t->inst;
 	modelID = inst->model->id;
 
 	tw = t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 	tw->timeAlive += gGT->elapsedTimeMS;
 
 	// NOTE(aalhendi): Retail starts/updates the bomb, missile, and shield loop SFX here.
@@ -88,7 +90,7 @@ LAB_800adc08:;
 	    // if driver is invalid
 	    (driverTarget == 0) || (tw->blindFrames != 0))
 	{
-		if (tw->blindFrames != 0)
+		if ((frameAdvance > 0) && (tw->blindFrames != 0))
 		{
 			tw->blindFrames--;
 		}
@@ -111,7 +113,10 @@ LAB_800adc08:;
 		// if seeking mine
 		else
 		{
-			tw->framesSeekTargetTnt--;
+			if (frameAdvance > 0)
+			{
+				tw->framesSeekTargetTnt--;
+			}
 
 			// if target shot a TNT
 			struct Instance *instTNT = tw->driverTarget->instTntSend;
@@ -177,14 +182,14 @@ LAB_800adc08:;
 	int animFrameCount = INSTANCE_GetNumAnimFrames(inst, 0);
 
 	// if instance is not at end of animation
-	if ((int)animFrame + 1 < animFrameCount)
+	if ((frameAdvance > 0) && ((int)animFrame + 1 < animFrameCount))
 	{
 		// increment animation frame
 		inst->animFrame += 1;
 	}
 
 	// if animation finished
-	else
+	else if (frameAdvance > 0)
 	{
 		// go back to first frame of animation
 		inst->animFrame = 0;

@@ -16,11 +16,13 @@ void RB_Armadillo_ThTick_TurnAround(struct Thread *t)
 {
 	struct Instance *armInst;
 	struct Armadillo *armObj;
+	int frameAdvance;
 
 	armInst = t->inst;
 	armObj = (struct Armadillo *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
-	if (armObj->rotCurr.y == armObj->rotDesired.y)
+	if ((frameAdvance > 0) && (armObj->rotCurr.y == armObj->rotDesired.y))
 	{
 		// if animation is not over
 		if ((armInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(armInst, 0))
@@ -48,7 +50,7 @@ void RB_Armadillo_ThTick_TurnAround(struct Thread *t)
 		}
 	}
 
-	else
+	else if (frameAdvance > 0)
 	{
 		// spin rotCurrY 180 degrees (turn around)
 		armObj->rotCurr.y = RB_Hazard_InterpolateValue(armObj->rotCurr.y, armObj->rotDesired.y, 0x100);
@@ -68,17 +70,22 @@ void RB_Armadillo_ThTick_Rolling(struct Thread *t)
 	struct Instance *armInst;
 	struct Armadillo *armObj;
 	SVECTOR rot;
+	int frameAdvance;
 
 	armInst = t->inst;
 	armObj = (struct Armadillo *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if (armObj->timeAtEdge != 0)
 	{
-		armObj->timeAtEdge--;
+		if (frameAdvance > 0)
+		{
+			armObj->timeAtEdge--;
+		}
 		return;
 	}
 
-	if (armObj->timeRolling < 0x500)
+	if ((frameAdvance > 0) && (armObj->timeRolling < 0x500))
 	{
 		// 32ms, 30fps
 		armObj->timeRolling += 0x20;
@@ -111,6 +118,11 @@ void RB_Armadillo_ThTick_Rolling(struct Thread *t)
 			// no sound here
 		}
 
+		Seal_CheckColl(armInst, t, 1, 0x2400, 0x71);
+		return;
+	}
+	else if (frameAdvance <= 0)
+	{
 		Seal_CheckColl(armInst, t, 1, 0x2400, 0x71);
 		return;
 	}

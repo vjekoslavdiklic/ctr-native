@@ -99,9 +99,17 @@ void RB_Seal_ThTick_TurnAround(struct Thread *t)
 {
 	struct Instance *sealInst;
 	struct Seal *sealObj;
+	int frameAdvance;
 
 	sealInst = t->inst;
 	sealObj = (struct Seal *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+
+	if (frameAdvance <= 0)
+	{
+		Seal_CheckColl(sealInst, t, 1, 0x4000, 0x78);
+		return;
+	}
 
 	// if animation is not over
 	if ((sealInst->animFrame + 2) < INSTANCE_GetNumAnimFrames(sealInst, 0))
@@ -161,9 +169,21 @@ void RB_Seal_ThTick_Move(struct Thread *t)
 	struct Instance *sealInst;
 	struct Seal *sealObj;
 	int i;
+	int frameAdvance;
 
 	sealInst = t->inst;
 	sealObj = (struct Seal *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+
+	if (frameAdvance <= 0)
+	{
+		for (i = 0; i < 3; i++)
+		{
+			sealInst->matrix.t[i] = (int)sealObj->spawnPos.v[i] - (sealObj->distFromSpawn * (int)sealObj->vel.v[i]) / 0x2d;
+		}
+		Seal_CheckColl(sealInst, t, 1, 0x4000, 0x78);
+		return;
+	}
 
 	// if animation is not over
 	if ((sealInst->animFrame + 2) < INSTANCE_GetNumAnimFrames(sealInst, 0))

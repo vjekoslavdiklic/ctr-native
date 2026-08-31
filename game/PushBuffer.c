@@ -5,11 +5,82 @@ enum
 {
 	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM = 10,
 	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN = 1,
+	CTR_NATIVE_RENDER_CAMERA_BLEND_NUM = 3,
+	CTR_NATIVE_RENDER_CAMERA_BLEND_DEN = 4,
 };
+
+static b32 s_nativeRenderCameraValid[4];
+static Vec3 s_nativeRenderCameraPos[4];
+static SVec3 s_nativeRenderCameraRot[4];
+static Vec3 s_nativeRenderCameraRawPrevPos[4];
+static SVec3 s_nativeRenderCameraRawPrevRot[4];
 
 static int PushBuffer_ScaleTraversalDepth(int depth)
 {
 	return (depth * CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM) / CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN;
+}
+
+static s32 PushBuffer_BlendRenderCameraAxis(s32 curr, s32 prev)
+{
+	return (curr * CTR_NATIVE_RENDER_CAMERA_BLEND_NUM + prev * (CTR_NATIVE_RENDER_CAMERA_BLEND_DEN - CTR_NATIVE_RENDER_CAMERA_BLEND_NUM)) /
+	       CTR_NATIVE_RENDER_CAMERA_BLEND_DEN;
+}
+
+static s16 PushBuffer_BlendRenderCameraAngle(s16 curr, s16 prev)
+{
+	s32 delta = (((s32)curr - (s32)prev + ANG_PI) & (ANG_TWO_PI - 1)) - ANG_PI;
+	return (s16)(prev + (delta * CTR_NATIVE_RENDER_CAMERA_BLEND_NUM) / CTR_NATIVE_RENDER_CAMERA_BLEND_DEN);
+}
+
+static void PushBuffer_BuildNativeRenderCameraState(const struct PushBuffer *pb, Vec3 *pos, SVec3 *rot)
+{
+	const int cameraID = (u8)pb->cameraID;
+
+	pos->x = pb->pos.x;
+	pos->y = pb->pos.y;
+	pos->z = pb->pos.z;
+	*rot = pb->rot;
+
+	if (!CTR_60HzMode_IsEnabled(sdata->gGT))
+	{
+		return;
+	}
+
+	if ((cameraID < 0) || (cameraID >= 4) || !s_nativeRenderCameraValid[cameraID])
+	{
+		return;
+	}
+
+	pos->x = PushBuffer_BlendRenderCameraAxis(pos->x, s_nativeRenderCameraRawPrevPos[cameraID].x);
+	pos->y = PushBuffer_BlendRenderCameraAxis(pos->y, s_nativeRenderCameraRawPrevPos[cameraID].y);
+	pos->z = PushBuffer_BlendRenderCameraAxis(pos->z, s_nativeRenderCameraRawPrevPos[cameraID].z);
+
+	rot->x = PushBuffer_BlendRenderCameraAngle(rot->x, s_nativeRenderCameraRawPrevRot[cameraID].x);
+	rot->y = PushBuffer_BlendRenderCameraAngle(rot->y, s_nativeRenderCameraRawPrevRot[cameraID].y);
+	rot->z = PushBuffer_BlendRenderCameraAngle(rot->z, s_nativeRenderCameraRawPrevRot[cameraID].z);
+}
+
+void PushBuffer_GetNativeRenderCameraState(const struct PushBuffer *pb, Vec3 *pos, SVec3 *rot)
+{
+	const int cameraID = (u8)pb->cameraID;
+
+	if ((pos == NULL) || (rot == NULL))
+	{
+		return;
+	}
+
+	pos->x = pb->pos.x;
+	pos->y = pb->pos.y;
+	pos->z = pb->pos.z;
+	*rot = pb->rot;
+
+	if ((cameraID < 0) || (cameraID >= 4) || !s_nativeRenderCameraValid[cameraID])
+	{
+		return;
+	}
+
+	*pos = s_nativeRenderCameraPos[cameraID];
+	*rot = s_nativeRenderCameraRot[cameraID];
 }
 #else
 static int PushBuffer_ScaleTraversalDepth(int depth)
@@ -319,19 +390,24 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 	// originally used 556 bytes
 	struct PushBufferSetMatrixVPScratch *scratch = CTR_SCRATCHPAD_PTR(struct PushBufferSetMatrixVPScratch, 0);
 	MATRIX *matrixDST = &scratch->cameraMatrix;
+	Vec3 renderPos = {{pb->pos.x, pb->pos.y, pb->pos.z}};
 
+#if defined(CTR_NATIVE)
+	PushBuffer_BuildNativeRenderCameraState(pb, &renderPos, &scratch->rot);
+#else
 	scratch->rot = pb->rot;
+#endif
 	ConvertRotToMatrix(matrixDST, &scratch->rot);
 
 	SVec3 negPos;
 
-	pb->matrix_Camera.t[0] = pb->pos.x;
-	pb->matrix_Camera.t[1] = pb->pos.y;
-	pb->matrix_Camera.t[2] = pb->pos.z;
+	pb->matrix_Camera.t[0] = renderPos.x;
+	pb->matrix_Camera.t[1] = renderPos.y;
+	pb->matrix_Camera.t[2] = renderPos.z;
 
-	negPos.x = -pb->pos.x;
-	negPos.y = -pb->pos.y;
-	negPos.z = -pb->pos.z;
+	negPos.x = (s16)-renderPos.x;
+	negPos.y = (s16)-renderPos.y;
+	negPos.z = (s16)-renderPos.z;
 
 	// load inverted camera position
 #ifndef CTR_NATIVE
@@ -452,6 +528,23 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 	gte_r11(uVar6);
 #else
 	gte_SetLightMatrix(&scratch->cameraMatrix);
+#endif
+
+#if defined(CTR_NATIVE)
+	{
+		const int cameraID = (u8)pb->cameraID;
+
+		if ((cameraID >= 0) && (cameraID < 4))
+		{
+			s_nativeRenderCameraPos[cameraID] = renderPos;
+			s_nativeRenderCameraRot[cameraID] = scratch->rot;
+			s_nativeRenderCameraRawPrevPos[cameraID].x = pb->pos.x;
+			s_nativeRenderCameraRawPrevPos[cameraID].y = pb->pos.y;
+			s_nativeRenderCameraRawPrevPos[cameraID].z = pb->pos.z;
+			s_nativeRenderCameraRawPrevRot[cameraID] = pb->rot;
+			s_nativeRenderCameraValid[cameraID] = true;
+		}
+	}
 #endif
 
 	return;
@@ -624,6 +717,14 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 	cameraPosY = pb->pos.y;
 	cameraPosZ = pb->pos.z;
 #if defined(CTR_NATIVE)
+	{
+		Vec3 renderPos;
+		SVec3 renderRot;
+		PushBuffer_GetNativeRenderCameraState(pb, &renderPos, &renderRot);
+		cameraPosX = renderPos.x;
+		cameraPosY = renderPos.y;
+		cameraPosZ = renderPos.z;
+	}
 	s_pushBufferFrustumSavedCameraZ = cameraPosZ;
 #endif
 

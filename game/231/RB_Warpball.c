@@ -431,20 +431,22 @@ void RB_Warpball_ThTick(struct Thread *t)
 	int distY;
 	int distZ;
 	int distXZ;
+	int frameAdvance;
 
 	gGT = sdata->gGT;
 	inst = t->inst;
 	tw = t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	CTR_WriteU16LE(&tw->savedPosXY, (u16)inst->matrix.t[0]);
 	CTR_WriteU16LE((u8 *)&tw->savedPosXY + 2, (u16)inst->matrix.t[1]);
 	tw->savedPosZ = (s16)inst->matrix.t[2];
 
-	if ((int)inst->animFrame + 1 < INSTANCE_GetNumAnimFrames(inst, 0))
+	if ((frameAdvance > 0) && ((int)inst->animFrame + 1 < INSTANCE_GetNumAnimFrames(inst, 0)))
 	{
 		inst->animFrame++;
 	}
-	else
+	else if (frameAdvance > 0)
 	{
 		inst->animFrame = 0;
 	}

@@ -468,6 +468,30 @@ void UI_RenderFrame_Racing()
 				sVar2 = hudStructPtr[UI_HUD_SLOT_RANK].y;
 				UI_DrawPosSuffix(sVar1, sVar2, playerStruct, (s16)partTimeVariable5);
 
+#if defined(CTR_NATIVE)
+				// The retail 1P/2P position digit is a 3D model whose depth selects a
+				// glyph. With native supersampled render targets it can retain the
+				// first glyph even though driverRank and the suffix are current. Draw
+				// the digit directly from the live rank instead, and suppress only the
+				// legacy 1P/2P model so it cannot overlap the correct text.
+				if (numPlyr < 3)
+				{
+					int rank = playerStruct->driverRank;
+					if ((unsigned int)rank < 8)
+					{
+						string[0] = (char)('1' + rank);
+						string[1] = '\0';
+						DecalFont_DrawLine(string, hudStructPtr[UI_HUD_SLOT_BIG1].x, hudStructPtr[UI_HUD_SLOT_BIG1].y, FONT_BIG,
+						                   (s16)partTimeVariable5);
+					}
+
+					if (playerStruct->instBigNum != NULL)
+					{
+						playerStruct->instBigNum->flags |= HIDE_MODEL;
+					}
+				}
+#endif
+
 				if (numPlyr > 2)
 				{
 					// Get Color Data

@@ -44,9 +44,16 @@ static void RB_Blowup_UpdateSlot(int *slot)
 {
 	struct Instance *inst;
 	int nextFrame;
+	int frameAdvance;
 
 	inst = (struct Instance *)*slot;
 	if (inst == NULL)
+	{
+		return;
+	}
+
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+	if (frameAdvance <= 0)
 	{
 		return;
 	}

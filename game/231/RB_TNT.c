@@ -84,11 +84,17 @@ void RB_TNT_ThTick_SitOnHead(struct Thread *t)
 	s16 numFrames;
 	u16 scaleXZ;
 	int rng;
+	int frameAdvance;
 
 	inst = t->inst;
 
 	// object (tnt)
 	mw = t->object;
+#if defined(CTR_NATIVE)
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	frameAdvance = 1;
+#endif
 
 	// CopyMatrix
 	// To: TNT instance
@@ -155,6 +161,11 @@ void RB_TNT_ThTick_SitOnHead(struct Thread *t)
 	}
 	else
 	{
+		if (frameAdvance <= 0)
+		{
+			goto LAB_800ad5f8;
+		}
+
 		rng = MixRNG_Scramble();
 		if (rng != (rng / 0x10e) * 0x10e)
 		{
@@ -188,22 +199,26 @@ LAB_800ad5f8:
 
 	// If there is time remaining until TNT blows up,
 	// which takes 0x5a frames, 3 seconds
-	if (numFrames < 0x5a)
+	if ((numFrames < 0x5a) && (frameAdvance > 0))
 	{
-		// If frame is any of these 6 numbers
-		if ((numFrames == 0x0) || (numFrames == 0x14) || (numFrames == 0x28) || (numFrames == 0x3c) || (numFrames == 0x46) || (numFrames == 0x50))
+		while ((frameAdvance-- > 0) && (numFrames < 0x5a))
 		{
-			// Make a "honk" sound
-			PlaySound3D(0x3e, inst);
+			// If frame is any of these 6 numbers
+			if ((numFrames == 0x0) || (numFrames == 0x14) || (numFrames == 0x28) || (numFrames == 0x3c) || (numFrames == 0x46) || (numFrames == 0x50))
+			{
+				// Make a "honk" sound
+				PlaySound3D(0x3e, inst);
+			}
+
+			// add to the frame counter
+			numFrames += 1;
 		}
 
-		// add to the frame counter
-		mw->numFramesOnHead += 1;
-		numFrames = mw->numFramesOnHead;
+		mw->numFramesOnHead = numFrames;
 	}
 
 	// If time runs out
-	else
+	else if (numFrames >= 0x5a)
 	{
 		// Blow up
 

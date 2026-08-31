@@ -401,21 +401,21 @@ void MakeTexcoordQuad(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, u8 *uv3, s16 
 	vertex[3].dither = dither;
 	vertex[3].page = texPage;
 	vertex[3].clut = clut;
-	/*
+
 	if (g_cfg_bilinearFiltering)
 	{
-	    vertex[0].tcx = -1;
-	    vertex[0].tcy = -1;
+		vertex[0].tcx = -1;
+		vertex[0].tcy = -1;
 
-	    vertex[1].tcx = -1;
-	    vertex[1].tcy = -1;
+		vertex[1].tcx = -1;
+		vertex[1].tcy = -1;
 
-	    vertex[2].tcx = -1;
-	    vertex[2].tcy = -1;
+		vertex[2].tcx = -1;
+		vertex[2].tcy = -1;
 
-	    vertex[3].tcx = -1;
-	    vertex[3].tcy = -1;
-	}*/
+		vertex[3].tcx = -1;
+		vertex[3].tcy = -1;
+	}
 }
 
 void MakeTexcoordTriangle(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, s16 page, s16 clut, u8 dither)
@@ -447,21 +447,18 @@ void MakeTexcoordTriangle(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, s16 page,
 	vertex[2].dither = dither;
 	vertex[2].page = texPage;
 	vertex[2].clut = clut;
-	/*
+
 	if (g_cfg_bilinearFiltering)
 	{
-	    vertex[0].tcx = -1;
-	    vertex[0].tcy = -1;
+		vertex[0].tcx = -1;
+		vertex[0].tcy = -1;
 
-	    vertex[1].tcx = -1;
-	    vertex[1].tcy = -1;
+		vertex[1].tcx = -1;
+		vertex[1].tcy = -1;
 
-	    vertex[2].tcx = -1;
-	    vertex[2].tcy = -1;
-
-	    vertex[3].tcx = -1;
-	    vertex[3].tcy = -1;
-	}*/
+		vertex[2].tcx = -1;
+		vertex[2].tcy = -1;
+	}
 }
 
 void MakeTexcoordRect(GrVertex *vertex, u8 *uv, s16 page, s16 clut, s16 w, s16 h)

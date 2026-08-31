@@ -7,9 +7,11 @@ void RB_Turtle_ThTick(struct Thread *t)
 	struct Turtle *turtleObj;
 	struct Instance *turtleInst;
 	int currTimer;
+	int frameAdvance;
 
 	turtleObj = t->object;
 	turtleInst = t->inst;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if (turtleObj->direction == TURTLE_DIRECTION_RISING)
 	{
@@ -49,7 +51,7 @@ void RB_Turtle_ThTick(struct Thread *t)
 			// use timer variables for frame counting
 
 			// decrement frame (make turtle rise)
-			currTimer = turtleInst->animFrame - 1;
+			currTimer = turtleInst->animFrame - frameAdvance;
 
 			// end of animation
 			if (currTimer < 1)
@@ -99,7 +101,7 @@ void RB_Turtle_ThTick(struct Thread *t)
 			// use timer variables for frame counting
 
 			// increment frame (make turtle fall)
-			currTimer = turtleInst->animFrame + 1;
+			currTimer = turtleInst->animFrame + frameAdvance;
 
 			// playing animation
 			if (currTimer < INSTANCE_GetNumAnimFrames(turtleInst, 0))

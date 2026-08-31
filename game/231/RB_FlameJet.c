@@ -312,6 +312,7 @@ void RB_FlameJet_ThTick(struct Thread *t)
 	struct Driver *hitDriver;
 
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	fjInst = t->inst;
 	fjObj = (struct FlameJet *)t->object;
@@ -319,7 +320,10 @@ void RB_FlameJet_ThTick(struct Thread *t)
 	// NOTE(aalhendi): ASM-verified audio/lifecycle path for NTSC-U 926 0x800b6728-0x800b6938.
 	if (fjObj->cooldown != 0)
 	{
-		fjObj->cooldown--;
+		if (frameAdvance > 0)
+		{
+			fjObj->cooldown--;
+		}
 		return;
 	}
 
@@ -329,7 +333,10 @@ void RB_FlameJet_ThTick(struct Thread *t)
 		PlaySound3D_Flags(&fjObj->soundIDCount, 0x68, fjInst);
 
 		// Retail increments this object slot, but no known reader uses it.
-		fjObj->unusedPhase += 0x100;
+		if (frameAdvance > 0)
+		{
+			fjObj->unusedPhase += 0x100;
+		}
 
 		RB_FlameJet_Particles(fjInst, fjObj);
 
@@ -395,7 +402,10 @@ void RB_FlameJet_ThTick(struct Thread *t)
 
 EndFjThTick:
 
-	fjObj->cycleTimer++;
+	if (frameAdvance > 0)
+	{
+		fjObj->cycleTimer++;
+	}
 	Vector_SpecLightNoSpin3D(fjInst, &fjInst->instDef->rot, &fjLightDir);
 }
 

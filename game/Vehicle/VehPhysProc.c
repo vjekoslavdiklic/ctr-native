@@ -15,7 +15,7 @@ enum
 	VEH_PHYS_PROC_WEAPON_COOLDOWN_STACK_FRAMES = 5,
 	VEH_PHYS_PROC_JUMP_BUTTON_MASK = BTN_R1 | BTN_L1,
 	VEH_PHYS_PROC_DEFAULT_DRIFT_BUTTON = BTN_R1,
-	VEH_PHYS_PROC_JUMP_BUFFER_FRAMES = 10,
+	VEH_PHYS_PROC_JUMP_BUFFER_FRAMES = 20,
 	VEH_PHYS_PROC_ASSUMED_CROSS_BUTTON = BTN_CROSS_one,
 	VEH_PHYS_PROC_INVISIBLE_REAPPEAR_FX = 0x62,
 	VEH_PHYS_PROC_ITEM_ROLL_NORMAL_FX = 0x5e,
@@ -107,7 +107,7 @@ CTR_STATIC_ASSERT(VEH_PHYS_PROC_WEAPON_COOLDOWN_EMPTY_FRAMES == 0x1e);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_WEAPON_COOLDOWN_STACK_FRAMES == 5);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_JUMP_BUTTON_MASK == 0xc00);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_DEFAULT_DRIFT_BUTTON == 0x400);
-CTR_STATIC_ASSERT(VEH_PHYS_PROC_JUMP_BUFFER_FRAMES == 10);
+CTR_STATIC_ASSERT(VEH_PHYS_PROC_JUMP_BUFFER_FRAMES == 20);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_ASSUMED_CROSS_BUTTON == 0x10);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_INVISIBLE_REAPPEAR_FX == 0x62);
 CTR_STATIC_ASSERT(VEH_PHYS_PROC_ITEM_ROLL_NORMAL_FX == 0x5e);
@@ -249,6 +249,7 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 	u32 square;
 
 	int msPerFrame;
+	int frameAdvance;
 	RainCloudEffect rainCloudEffect;
 	u32 itemSound;
 	u32 actionsFlagSetNext;
@@ -279,6 +280,11 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 
 	// elapsed milliseconds per frame, ~32
 	msPerFrame = gGT->elapsedTimeMS;
+#if defined(CTR_NATIVE)
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	frameAdvance = 1;
+#endif
 
 	if ((gGT->elapsedEventTime < 10 * MINUTE) && ((driver->actionsFlagSet & ACTION_RACE_TIMER_FROZEN) == 0))
 	{
@@ -326,7 +332,14 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 
 	if (0 < driver->jump_TenBuffer)
 	{
-		driver->jump_TenBuffer = (s16)CTR_MipsSubLo(driver->jump_TenBuffer, 1);
+		if (frameAdvance > 0)
+		{
+			driver->jump_TenBuffer = (s16)CTR_MipsSubLo(driver->jump_TenBuffer, frameAdvance);
+			if (driver->jump_TenBuffer < 0)
+			{
+				driver->jump_TenBuffer = 0;
+			}
+		}
 	}
 	if (driver->numWumpas >= VEH_PHYS_PROC_TEN_WUMPA_COUNT)
 	{
@@ -513,7 +526,14 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 		// if Item roll is not done
 		else
 		{
-			driver->itemRollTimer = (s16)CTR_MipsSubLo(driver->itemRollTimer, 1);
+			if (frameAdvance > 0)
+			{
+				driver->itemRollTimer = (s16)CTR_MipsSubLo(driver->itemRollTimer, frameAdvance);
+				if (driver->itemRollTimer < 0)
+				{
+					driver->itemRollTimer = 0;
+				}
+			}
 		}
 	}
 
@@ -525,7 +545,7 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 	if (noItemTimer != 0)
 	{
 		// if Item is about to be gone and Number of Items = 0
-		if ((noItemTimer == 1) && (driver->numHeldItems == 0))
+		if ((frameAdvance > 0) && (noItemTimer <= frameAdvance) && (driver->numHeldItems == 0))
 		{
 			if (
 			    // multiplayer game, not battle, weapon was 3 missiles
@@ -540,7 +560,14 @@ void VehPhysProc_Driving_PhysLinear(struct Thread *thread, struct Driver *driver
 			driver->heldItemID = HELD_ITEM_NONE;
 		}
 
-		driver->noItemTimer = (s16)CTR_MipsSubLo(noItemTimer, 1);
+		if (frameAdvance > 0)
+		{
+			driver->noItemTimer = (s16)CTR_MipsSubLo(noItemTimer, frameAdvance);
+			if (driver->noItemTimer < 0)
+			{
+				driver->noItemTimer = 0;
+			}
+		}
 	}
 
 	if (driver->invincibleTimer != 0)
@@ -1559,6 +1586,13 @@ void VehPhysProc_PowerSlide_PhysAngular(struct Thread *th, struct Driver *driver
 {
 	(void)th;
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance;
+
+#if defined(CTR_NATIVE)
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+#else
+	frameAdvance = 1;
+#endif
 
 	int axisAngleDelta = CTR_MipsSubLo(ANG_MODULO_TWO_PI(CTR_MipsAddLo(CTR_MipsSubLo(driver->axisRotationX, driver->angle), ANG_PI)), ANG_PI);
 	if (axisAngleDelta != 0)
@@ -1706,17 +1740,20 @@ void VehPhysProc_PowerSlide_PhysAngular(struct Thread *th, struct Driver *driver
 	// interpolate to "neutral" drift
 	if ((desiredSpinRate == 0) || (driftDirection == 0))
 	{
-		// Interpolate by 1 unit, until zero
-		driver->KartStates.Drifting.numFramesDrifting = VehCalc_InterpBySpeed((int)driver->KartStates.Drifting.numFramesDrifting, 1, 0);
+		if (frameAdvance > 0)
+		{
+			driver->KartStates.Drifting.numFramesDrifting =
+			    VehCalc_InterpBySpeed((int)driver->KartStates.Drifting.numFramesDrifting, frameAdvance, 0);
+		}
 	}
 
 	// if holding a drift
 	else
 	{
 		// if drifting right
-		if (driftDirection < 1)
+		if ((frameAdvance > 0) && (driftDirection < 1))
 		{
-			driver->KartStates.Drifting.numFramesDrifting = (s16)CTR_MipsSubLo((u16)driver->KartStates.Drifting.numFramesDrifting, 1);
+			driver->KartStates.Drifting.numFramesDrifting = (s16)CTR_MipsSubLo((u16)driver->KartStates.Drifting.numFramesDrifting, frameAdvance);
 
 			if (driver->KartStates.Drifting.numFramesDrifting > 0)
 			{
@@ -1725,9 +1762,9 @@ void VehPhysProc_PowerSlide_PhysAngular(struct Thread *th, struct Driver *driver
 		}
 
 		// if drifting left
-		else
+		else if (frameAdvance > 0)
 		{
-			driver->KartStates.Drifting.numFramesDrifting = (s16)CTR_MipsAddLo((u16)driver->KartStates.Drifting.numFramesDrifting, 1);
+			driver->KartStates.Drifting.numFramesDrifting = (s16)CTR_MipsAddLo((u16)driver->KartStates.Drifting.numFramesDrifting, frameAdvance);
 
 			if (driver->KartStates.Drifting.numFramesDrifting < 0)
 			{
@@ -1900,17 +1937,38 @@ void VehPhysProc_PowerSlide_PhysAngular(struct Thread *th, struct Driver *driver
 			turnWobbleVelocityAbs = CTR_MipsNegLo(turnWobbleVelocityAbs);
 		}
 
-		// move down until zero
-		turnWobbleAngleNext = VehCalc_InterpBySpeed(driver->turnWobbleAngle, turnWobbleVelocityAbs, 0);
+		if (frameAdvance > 0)
+		{
+			// move down until zero
+			turnWobbleAngleNext = VehCalc_InterpBySpeed(driver->turnWobbleAngle, turnWobbleVelocityAbs * frameAdvance, 0);
+		}
+		else
+		{
+			turnWobbleAngleNext = driver->turnWobbleAngle;
+		}
 	}
 
 	// frames counting down
 	else
 	{
-		driver->turnWobbleTimer = (s16)CTR_MipsSubLo((u16)driver->turnWobbleTimer, 1);
+		if (frameAdvance > 0)
+		{
+			driver->turnWobbleTimer = (s16)CTR_MipsSubLo((u16)driver->turnWobbleTimer, frameAdvance);
+			if (driver->turnWobbleTimer < 0)
+			{
+				driver->turnWobbleTimer = 0;
+			}
+		}
 
-		// move up each frame
-		turnWobbleAngleNext = CTR_MipsAddLo((u16)driver->turnWobbleAngle, (u16)driver->turnWobbleVelocity);
+		if (frameAdvance > 0)
+		{
+			// move up each frame
+			turnWobbleAngleNext = CTR_MipsAddLo((u16)driver->turnWobbleAngle, driver->turnWobbleVelocity * frameAdvance);
+		}
+		else
+		{
+			turnWobbleAngleNext = driver->turnWobbleAngle;
+		}
 	}
 
 	// near-spinout distortion SFX
@@ -2278,10 +2336,11 @@ void VehPhysProc_SlamWall_PhysLinear(struct Thread *t, struct Driver *d)
 void VehPhysProc_SlamWall_Animate(struct Thread *t, struct Driver *d)
 {
 	struct Instance *inst = t->inst;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
-	inst->animFrame = (s16)CTR_MipsAddLo((u16)inst->animFrame, 1);
+	inst->animFrame = (s16)CTR_MipsAddLo((u16)inst->animFrame, frameAdvance);
 
-	d->matrixIndex = (u8)CTR_MipsAddLo(d->matrixIndex, 1);
+	d->matrixIndex = (u8)CTR_MipsAddLo(d->matrixIndex, frameAdvance);
 
 	int numFrames = VehFrameInst_GetNumAnimFrames(inst, inst->animIndex);
 

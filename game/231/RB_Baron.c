@@ -32,6 +32,7 @@ void RB_Baron_ThTick(struct Thread *t)
 	struct SpawnType2 *spawn;
 	int pointIndex;
 	int modelID;
+	int frameAdvance;
 
 	struct Driver *hitDriver;
 	struct Instance *hitInst;
@@ -40,12 +41,13 @@ void RB_Baron_ThTick(struct Thread *t)
 	baronObj = (struct Baron *)t->object;
 	gGT = sdata->gGT;
 	level = gGT->level1;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
-	if ((baronInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(baronInst, 0))
+	if ((frameAdvance > 0) && ((baronInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(baronInst, 0)))
 	{
 		baronInst->animFrame++;
 	}
-	else
+	else if (frameAdvance > 0)
 	{
 		baronInst->animFrame = 0;
 	}
@@ -56,7 +58,11 @@ void RB_Baron_ThTick(struct Thread *t)
 	}
 
 	spawn = &level->ptrSpawnType2_PosRot[0];
-	pointIndex = (baronObj->pointIndex + 1) % spawn->numCoords;
+	pointIndex = baronObj->pointIndex;
+	if (frameAdvance > 0)
+	{
+		pointIndex = (pointIndex + 1) % spawn->numCoords;
+	}
 	baronObj->pointIndex = pointIndex;
 	modelID = baronInst->model->id;
 

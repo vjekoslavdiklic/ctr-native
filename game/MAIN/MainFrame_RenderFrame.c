@@ -181,27 +181,6 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 			WindowDivsionLines(gGT);
 		}
 
-		// if game is not loading
-		if (sdata->Loading.stage == LOAD_IDLE)
-		{
-			// If game is not paused
-			if ((gGT->gameMode1 & PAUSE_ALL) == 0)
-			{
-				PickupBots_Update();
-			}
-
-#if defined(CTR_NATIVE)
-			// NOTE(aalhendi): Native menu/adventure-hub LEVs may publish no
-			// restart table. Retail lap stats assume the table exists whenever
-			// this caller reaches them; keep the ASM-verified lap function intact.
-			if ((gGT->level1 != NULL) && (gGT->level1->ptr_restart_points != NULL) && (gGT->level1->cnt_restart_points != 0))
-			{
-				PlayLevel_UpdateLapStats();
-			}
-#else
-			PlayLevel_UpdateLapStats();
-#endif
-		}
 		MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_POST_LEVEL);
 	}
 
@@ -1314,7 +1293,7 @@ void RenderSubmit(struct GameTracker *gGT)
 
 #if defined(CTR_NATIVE)
 
-	sdata->vsyncTillFlip = 2;
+	sdata->vsyncTillFlip = CTR_60HzMode_GetFlipVsyncs(gGT);
 
 	// Native still renders immediately through PsyCross, so keep the host GPU's
 	// active draw/display envs in step with the retail DB selected this frame.

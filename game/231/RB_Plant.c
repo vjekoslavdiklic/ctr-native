@@ -30,9 +30,16 @@ void RB_Plant_ThTick_Eat(struct Thread *t)
 	struct Particle *particle;
 	struct Instance *plantInst;
 	struct Plant *plantObj;
+	int frameAdvance;
 
 	plantInst = t->inst;
 	plantObj = (struct Plant *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+
+	if (frameAdvance <= 0)
+	{
+		return;
+	}
 
 	if (plantInst->animIndex == PlantAnim_StartEat)
 	{
@@ -163,6 +170,7 @@ void RB_Plant_ThTick_Grab(struct Thread *t)
 	struct Instance *hitInst;
 	struct Thread *threadHit;
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	plantInst = t->inst;
 
@@ -173,7 +181,7 @@ void RB_Plant_ThTick_Grab(struct Thread *t)
 	if (plantInst->animIndex == PlantAnim_GrabDriver)
 	{
 		// if animation is not over
-		if ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_GrabDriver))
+		if ((frameAdvance > 0) && ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_GrabDriver)))
 		{
 			// increment frame
 			plantInst->animFrame = plantInst->animFrame + 1;
@@ -192,7 +200,7 @@ void RB_Plant_ThTick_Grab(struct Thread *t)
 			}
 		}
 
-		else
+		else if (frameAdvance > 0)
 		{
 			plantInst->animFrame = 0;
 			plantInst->animIndex = PlantAnim_StartEat;
@@ -202,11 +210,11 @@ void RB_Plant_ThTick_Grab(struct Thread *t)
 
 	else if (plantInst->animIndex == PlantAnim_GrabMine)
 	{
-		if ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_GrabMine))
+		if ((frameAdvance > 0) && ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_GrabMine)))
 		{
 			plantInst->animFrame = plantInst->animFrame + 1;
 		}
-		else
+		else if (frameAdvance > 0)
 		{
 			plantInst->animFrame = 0;
 			plantInst->animIndex = PlantAnim_Rest;
@@ -219,6 +227,12 @@ void RB_Plant_ThTick_Grab(struct Thread *t)
 void RB_Plant_ThTick_Transition_HungryToRest(struct Thread *t)
 {
 	struct Instance *plantInst = t->inst;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+
+	if (frameAdvance <= 0)
+	{
+		return;
+	}
 
 	// if animation is not over (backwards)
 	if ((plantInst->animFrame - 1) > 0)
@@ -249,22 +263,24 @@ void RB_Plant_ThTick_Hungry(struct Thread *t)
 	struct Driver *hitDriver;
 
 	struct GameTracker *gGT = sdata->gGT;
+	int frameAdvance;
 
 	plantInst = t->inst;
 	plantObj = (struct Plant *)t->object;
 	plantBoxDescLocal = plantBoxDesc;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	// if animIndex == PlantAnim_Hungry
 
 	// if animation is not over
-	if ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_Hungry))
+	if ((frameAdvance > 0) && ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_Hungry)))
 	{
 		// increment frame
 		plantInst->animFrame = plantInst->animFrame + 1;
 	}
 
 	// if animation is done
-	else
+	else if (frameAdvance > 0)
 	{
 		// reset animation
 		plantInst->animFrame = 0;
@@ -349,27 +365,32 @@ void RB_Plant_ThTick_Rest(struct Thread *t)
 {
 	struct Instance *plantInst;
 	struct Plant *plantObj;
+	int frameAdvance;
 
 	plantInst = t->inst;
 	plantObj = (struct Plant *)t->object;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	if (plantObj->cooldown != 0)
 	{
-		plantObj->cooldown--;
+		if (frameAdvance > 0)
+		{
+			plantObj->cooldown--;
+		}
 		return;
 	}
 
 	if (plantInst->animIndex == PlantAnim_Rest)
 	{
 		// if animation is not over
-		if ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_Rest))
+		if ((frameAdvance > 0) && ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_Rest)))
 		{
 			// increment frame
 			plantInst->animFrame = plantInst->animFrame + 1;
 		}
 
 		// if animation is done
-		else
+		else if (frameAdvance > 0)
 		{
 			// reset animation
 			plantInst->animFrame = 0;
@@ -387,14 +408,14 @@ void RB_Plant_ThTick_Rest(struct Thread *t)
 	else if (plantInst->animIndex == PlantAnim_TransitionRestHungry)
 	{
 		// if animation is not over
-		if ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_TransitionRestHungry))
+		if ((frameAdvance > 0) && ((plantInst->animFrame + 1) < INSTANCE_GetNumAnimFrames(plantInst, PlantAnim_TransitionRestHungry)))
 		{
 			// increment frame
 			plantInst->animFrame = plantInst->animFrame + 1;
 		}
 
 		// animation is done
-		else
+		else if (frameAdvance > 0)
 		{
 			plantInst->animFrame = 0;
 			plantInst->animIndex = PlantAnim_Hungry;

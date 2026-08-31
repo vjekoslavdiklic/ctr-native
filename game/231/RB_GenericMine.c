@@ -79,11 +79,13 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	void (*func)(struct Thread *);
 	int param;
 	b32 boolPotion;
+	int frameAdvance;
 
 	gGT = sdata->gGT;
 	inst = t->inst;
 	mw = inst->thread->object;
 	model = inst->model->id;
+	frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 	boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;
 
@@ -125,13 +127,13 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	numFrames = (int)INSTANCE_GetNumAnimFrames(inst, 0);
 
 	// if animation is not over
-	if (inst->animFrame < numFrames - 1)
+	if ((frameAdvance > 0) && (inst->animFrame < numFrames - 1))
 	{
 		// increment animation frame
 		inst->animFrame++;
 	}
 	// if animation is over
-	else
+	else if (frameAdvance > 0)
 	{
 		// restart animation
 		inst->animFrame = 0;
@@ -156,7 +158,7 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	}
 
 	// If scale is not big enough
-	if (inst->scale.x < 0x1000)
+	if ((frameAdvance > 0) && (inst->scale.x < 0x1000))
 	{
 		// make scale larger each frame
 		inst->scale.x += 0x200;

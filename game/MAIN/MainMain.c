@@ -315,8 +315,10 @@ u32 main(void)
 				gGT->trafficLightsTimer = 0xfffffc40;
 			}
 
+			CTR_60HzMode_BeginFrame(gGT);
+
 			// frame counter, not represented in common.h currently
-			sdata->frameCounter++;
+			sdata->frameCounter += CTR_60HzMode_GetLegacyFrameAdvanceCount();
 
 			// Process all gamepad input
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)

@@ -272,7 +272,8 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 	// STATIC_TURBO_EFFECT7
 	turbo->inst->model = gGT->modelPtr[(((int)turbo->fireAnimIndex + TURBO_SECONDARY_MODEL_FRAME_OFFSET) & TURBO_ANIM_FRAME_MASK) + STATIC_TURBO_EFFECT];
 
-	turbo->fireAnimIndex++;
+	int frameAdvance = CTR_60HzMode_GetLegacyFrameAdvanceCount();
+	turbo->fireAnimIndex += frameAdvance;
 
 	// if eight or higher, back to zero
 	if (turbo->fireAnimIndex >= TURBO_ANIM_FRAME_COUNT)
@@ -280,7 +281,7 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		turbo->fireAnimIndex = 0;
 	}
 
-	if (turbo->fireDisappearCountdown > 0)
+	if ((frameAdvance > 0) && (turbo->fireDisappearCountdown > 0))
 	{
 		turbo->fireDisappearCountdown--;
 	}
