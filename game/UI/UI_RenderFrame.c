@@ -479,10 +479,25 @@ void UI_RenderFrame_Racing()
 					int rank = playerStruct->driverRank;
 					if ((unsigned int)rank < 8)
 					{
-						string[0] = (char)('1' + rank);
-						string[1] = '\0';
-						DecalFont_DrawLine(string, hudStructPtr[UI_HUD_SLOT_BIG1].x, hudStructPtr[UI_HUD_SLOT_BIG1].y, FONT_BIG,
-						                   (s16)partTimeVariable5);
+						u16 fontIconID = data.font_characterIconID[('1' + rank) - 0x21];
+						s16 fontIconGroupID = data.font_IconGroupID[FONT_BIG];
+						struct IconGroup *fontIconGroup = gGT->iconGroup[fontIconGroupID];
+
+						if ((fontIconGroup != NULL) && (fontIconID < fontIconGroup->numIcons))
+						{
+							struct Icon **fontIcons = ICONGROUP_GETICONS(fontIconGroup);
+							struct Icon *rankDigitIcon = fontIcons[fontIconID];
+							u32 *fontColor = data.ptrColor[partTimeVariable5];
+							s16 rankDigitScale = (numPlyr == 1) ? FP(3.0) : FP(2.0);
+							s16 rankDigitExtraHeight = (s16)FP_Mult(data.font_charPixHeight[FONT_BIG], rankDigitScale - FP(1.0));
+							s16 rankDigitWidth = (s16)FP_Mult(rankDigitIcon->texLayout.u1 - rankDigitIcon->texLayout.u0, rankDigitScale);
+							s16 rankDigitX = hudStructPtr[UI_HUD_SLOT_BIG1].x - (rankDigitWidth >> 1);
+							s16 rankDigitY = hudStructPtr[UI_HUD_SLOT_BIG1].y - (rankDigitExtraHeight >> 1);
+
+							DecalHUD_DrawPolyGT4(rankDigitIcon, rankDigitX, rankDigitY,
+							                         &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, fontColor[0], fontColor[1], fontColor[2],
+							                         fontColor[3], 0, rankDigitScale);
+						}
 					}
 
 					if (playerStruct->instBigNum != NULL)
