@@ -40,20 +40,33 @@ void DecalMP_01(struct GameTracker *gGT)
 		return;
 	}
 
-	int entryIndex = 0;
-
 #if defined(CTR_NATIVE)
-	// The original game leaves unused entries alive until the next level load.
-	// That is harmless when every decal is a tiny, heavily throttled PSX tile,
-	// but native render targets can otherwise draw a previous race/battle kart
-	// after the active player set changes. Rebuild the live list every frame.
-	for (int index = 0; index < 12; index++)
+	// Retail cannot afford to draw every kart in every split-screen viewport,
+	// so DecalMP diverts remote karts into 96x64 VRAM captures. Native render
+	// targets have no such limit: submit each driver normally to each active
+	// camera. This gives remote karts the same internal resolution, filtering,
+	// and geometry path as the owning player's kart in 2-, 3-, and 4-player.
+	for (int driverID = 0; driverID < 8; driverID++)
 	{
-		struct DecalMPEntry *entry = DecalMP_GetEntry(gGT, index);
-		entry->inst = NULL;
-		entry->boolUpdatedThisFrame = 0;
+		struct Driver *driver = gGT->drivers[driverID];
+		if ((driver == NULL) || (driver->instSelf == NULL))
+		{
+			continue;
+		}
+
+		struct Instance *inst = driver->instSelf;
+		inst->flags &= ~(PUSHBUFFER_EXISTS | PIXEL_LOD);
+
+		for (int cameraID = 0; cameraID < gGT->numPlyrCurrGame; cameraID++)
+		{
+			DecalMP_GetIdpp(inst, cameraID)->pushBuffer = &gGT->pushBuffer[cameraID];
+		}
 	}
+
+	return;
 #endif
+
+	int entryIndex = 0;
 
 	for (int cameraID = 0; cameraID < gGT->numPlyrCurrGame; cameraID++)
 	{
@@ -105,6 +118,11 @@ void DecalMP_01(struct GameTracker *gGT)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80023640-0x80023784.
 void DecalMP_02(struct GameTracker *gGT)
 {
+#if defined(CTR_NATIVE)
+	(void)gGT;
+	return;
+#endif
+
 	for (int index = 0; index < 12; index++)
 	{
 		struct DecalMPEntry *entry = DecalMP_GetEntry(gGT, index);
@@ -179,6 +197,11 @@ void DecalMP_02(struct GameTracker *gGT)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80023784-0x80023a40.
 void DecalMP_03(struct GameTracker *gGT)
 {
+#if defined(CTR_NATIVE)
+	(void)gGT;
+	return;
+#endif
+
 	RECT viewport;
 	viewport.w = 0x60;
 	viewport.h = 0x40;
