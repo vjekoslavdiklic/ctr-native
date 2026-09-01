@@ -3,6 +3,8 @@
 #if defined(CTR_NATIVE)
 static char s_rectMenuNativeCheats[] = "CHEATS";
 static char s_rectMenuNativeBack[] = "BACK";
+static char s_rectMenuNativeVideo[] = "VIDEO";
+static char s_rectMenuNativeMods[] = "MODS";
 #endif
 
 static char *RECTMENU_GetString(s16 stringIndex)
@@ -15,6 +17,14 @@ static char *RECTMENU_GetString(s16 stringIndex)
 	if ((u16)stringIndex == RECTMENU_STRING_NATIVE_BACK)
 	{
 		return s_rectMenuNativeBack;
+	}
+	if ((u16)stringIndex == RECTMENU_STRING_NATIVE_VIDEO)
+	{
+		return s_rectMenuNativeVideo;
+	}
+	if ((u16)stringIndex == RECTMENU_STRING_NATIVE_MODS)
+	{
+		return s_rectMenuNativeMods;
 	}
 #endif
 

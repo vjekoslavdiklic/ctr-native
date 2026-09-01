@@ -257,6 +257,18 @@ END_FUNCTION:
 	D230.menuPlayers2P3P4P.posY_curr = D230.titlePlayersMenuPos.y + D230.titlePlayersTransition.currY;
 	D230.menuDifficulty.posX_curr = D230.titleDifficultyMenuPos.x + D230.titleDifficultyTransition.currX;
 	D230.menuDifficulty.posY_curr = D230.titleDifficultyMenuPos.y + D230.titleDifficultyTransition.currY;
+
+	// Character select destroys the title thread and changes the free camera.
+	// Once a return transition is complete, write the settled title camera here
+	// as well as in the title thread.  This makes the completed main-menu pose
+	// independent of thread execution order.
+	if ((D230.titleMenuState == TITLE_MENU_STATE_IN_MENU) && (D230.titleObj != NULL) &&
+	    (D230.titleIntroFrame >= TITLE_INTRO_MENU_READY_FRAME))
+	{
+		gGT->pushBuffer[0].distanceToScreen_PREV = TITLE_INTRO_DISTANCE_TO_SCREEN;
+		gGT->pushBuffer[0].distanceToScreen_CURR = TITLE_INTRO_DISTANCE_TO_SCREEN;
+		MM_Title_CameraMove(D230.titleObj, TITLE_INTRO_MENU_READY_FRAME);
+	}
 }
 
 // NOTE(aalhendi): ASM-verified against NTSC-U 926 overlay 230 0x800ac94c-0x800ac9fc.
@@ -384,8 +396,22 @@ static void MM_Title_UpdateTrophySpecLight(struct Instance *titleInst)
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800ac350-0x800ac6dc.
 void MM_Title_ThTick(struct Thread *title)
 {
-	// frame counters
+	// Capture the current animation frame first.  The manual button skip below
+	// changes the stored clock only after this capture, so automatic skipping
+	// must use the same ordering to leave the title camera/trophy in the exact
+	// state expected by later submenu return transitions.
 	s32 timer = D230.titleIntroFrame;
+
+#if defined(CTR_NATIVE)
+	if (Platform_GetSkipAllIntro())
+	{
+		// Use the original input-skip mechanism: advance only the animation
+		// clock, then let MM_Title_MenuUpdate perform its normal menu transition
+		// and input setup.  Forcing titleMenuState here bypasses that setup and
+		// leaves every submenu inaccessible.
+		D230.titleIntroFrame = TITLE_INTRO_SKIP_FRAME;
+	}
+#endif
 
 	// If you press Cross, Circle, Triangle, or Square
 	if ((sdata->buttonTapPerPlayer[0] & TITLE_INTRO_SKIP_INPUT) != 0)
@@ -561,7 +587,16 @@ void MM_Title_Init(void)
 			}
 		}
 
-		MM_Title_CameraMove(title, 0);
+		// A title object is also recreated after returning from character select.
+		// At that point the title clock is already complete, so initializing the
+		// camera at frame zero leaves the Crash/trophy scene at the intro pose
+		// until another title tick happens.  Start from the current settled frame.
+		s32 cameraFrame = D230.titleIntroFrame;
+		if (cameraFrame > TITLE_INTRO_MENU_READY_FRAME)
+		{
+			cameraFrame = TITLE_INTRO_MENU_READY_FRAME;
+		}
+		MM_Title_CameraMove(title, cameraFrame);
 	}
 }
 

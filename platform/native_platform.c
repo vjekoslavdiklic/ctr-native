@@ -42,6 +42,77 @@ global_variable int s_pinnedVramDisplayH = 0;
 #define NATIVE_FPS_REPORT_FRAME_WINDOW 2000
 global_variable int s_fpsFrameCount = 0;
 global_variable u64 s_fpsLastCounter = 0;
+global_variable int s_configResolutionPreset = 4;
+global_variable int s_configFPS = 60;
+global_variable int s_configDrawDistance = 10;
+global_variable int s_configSkipAllIntro = 0;
+global_variable struct PlatformCheatConfig s_configCheats = {0};
+global_variable char s_configPath[1024] = "ctr-native.cfg";
+
+internal void Platform_ApplyVideoResolutionPreset(int preset);
+
+internal void Platform_InitConfigPath(void)
+{
+	const char *basePath = SDL_GetBasePath();
+
+	if (basePath != NULL)
+	{
+		snprintf(s_configPath, sizeof(s_configPath), "%sctr-native.cfg", basePath);
+		SDL_free((void *)basePath);
+	}
+}
+
+internal void Platform_SaveVideoConfig(void)
+{
+	FILE *file = fopen(s_configPath, "w");
+	if (file != NULL)
+	{
+		fprintf(file,
+		        "resolution=%d\nfps=%d\ndraw_distance=%d\nskip_all_intro=%d\ncheat_flags=%u\nunlock_characters=%d\nunlock_stages=%d\nunlock_scrapbook=%d\n"
+		        "unlock_characters_original=%u\nunlock_stages_original=%u\nunlock_scrapbook_original=%d\n",
+		        s_configResolutionPreset, s_configFPS, s_configDrawDistance, s_configSkipAllIntro, s_configCheats.gameModeFlags, s_configCheats.unlockCharacters,
+		        s_configCheats.unlockStages, s_configCheats.unlockScrapbook, s_configCheats.originalCharacters, s_configCheats.originalStages,
+		        s_configCheats.originalScrapbook);
+		fclose(file);
+	}
+}
+
+internal int Platform_LoadVideoConfig(void)
+{
+	char line[64];
+	FILE *file = fopen(s_configPath, "r");
+	if (file == NULL)
+		return 0;
+
+	while (fgets(line, sizeof(line), file) != NULL)
+	{
+		int value;
+		if (sscanf(line, "resolution=%d", &value) == 1 && value >= 0 && value <= 4)
+			s_configResolutionPreset = value;
+		else if (sscanf(line, "fps=%d", &value) == 1 && (value == 30 || value == 60 || value == 120))
+			s_configFPS = value;
+		else if (sscanf(line, "draw_distance=%d", &value) == 1 && (value == 1 || value == 2 || value == 5 || value == 10 || value == 20 || value == 100))
+			s_configDrawDistance = value;
+		else if (sscanf(line, "skip_all_intro=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configSkipAllIntro = value;
+		else if (sscanf(line, "cheat_flags=%u", &s_configCheats.gameModeFlags) == 1)
+			;
+		else if (sscanf(line, "unlock_characters=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configCheats.unlockCharacters = value;
+		else if (sscanf(line, "unlock_stages=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configCheats.unlockStages = value;
+		else if (sscanf(line, "unlock_scrapbook=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configCheats.unlockScrapbook = value;
+		else if (sscanf(line, "unlock_characters_original=%u", &s_configCheats.originalCharacters) == 1)
+			;
+		else if (sscanf(line, "unlock_stages_original=%u", &s_configCheats.originalStages) == 1)
+			;
+		else if (sscanf(line, "unlock_scrapbook_original=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configCheats.originalScrapbook = value;
+	}
+	fclose(file);
+	return 1;
+}
 
 internal void Platform_CalcFPS(void)
 {
@@ -248,6 +319,7 @@ void Platform_Init(const char *title, int width, int height)
 	}
 
 	s_platformInitialized = 1;
+	Platform_InitConfigPath();
 
 	if (!NativeRenderer_InitialiseRender(windowName, width, height, 0))
 	{
@@ -263,6 +335,14 @@ void Platform_Init(const char *title, int width, int height)
 		return;
 	}
 
+	// Load once at startup.  Only a missing config creates defaults; existing
+	// user settings must remain untouched until the user changes a setting.
+	if (!Platform_LoadVideoConfig())
+	{
+		Platform_SaveVideoConfig();
+	}
+	Platform_ApplyVideoResolutionPreset(s_configResolutionPreset);
+
 	atexit(Platform_Shutdown);
 	Platform_UpdateCursorVisibility();
 	Platform_InputInit();
@@ -276,6 +356,7 @@ void Platform_Shutdown(void)
 	}
 
 	s_platformInitialized = 0;
+	Platform_SaveVideoConfig();
 #if defined(CTR_INTERNAL)
 	NativeRenderer_FinishGpuMeasurements();
 	NativePerf_Shutdown();
@@ -301,6 +382,110 @@ void Platform_RequestQuit(void)
 	// Use the same orderly process-exit route as the window close event. The
 	// atexit handler releases audio, input, renderer, and SDL resources.
 	exit(0);
+}
+
+int Platform_GetVideoResolutionPreset(void)
+{
+	return NativeRenderer_GetInternalResolutionPreset();
+}
+
+internal void Platform_ApplyVideoResolutionPreset(int preset)
+{
+	static const int widths[] = {854, 1280, 1920, 2560, 3840};
+	static const int heights[] = {480, 720, 1080, 1440, 2160};
+
+	if ((preset < 0) || (preset >= 5))
+	{
+		return;
+	}
+
+	NativeRenderer_SetInternalResolutionPreset(preset);
+
+	// Keep the visible output in sync with the selected full-engine render
+	// resolution. The renderer also rebuilds its internal supersampled targets.
+	if (g_window != NULL)
+	{
+		const b32 wasFullscreen = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0;
+		if (wasFullscreen)
+			SDL_SetWindowFullscreen(g_window, false);
+		SDL_SetWindowSize(g_window, widths[preset], heights[preset]);
+		if (wasFullscreen)
+			SDL_SetWindowFullscreen(g_window, true);
+		g_windowWidth = widths[preset];
+		g_windowHeight = heights[preset];
+		NativeRenderer_ResetDevice();
+	}
+}
+
+void Platform_SetVideoResolutionPreset(int preset)
+{
+	if ((preset < 0) || (preset >= 5))
+	{
+		return;
+	}
+
+	s_configResolutionPreset = preset;
+	Platform_ApplyVideoResolutionPreset(preset);
+	Platform_SaveVideoConfig();
+}
+
+int Platform_GetConfiguredFPS(void)
+{
+	return s_configFPS;
+}
+
+void Platform_SetConfiguredFPS(int fps)
+{
+	if ((fps == 30) || (fps == 60) || (fps == 120))
+	{
+		s_configFPS = fps;
+		Platform_SaveVideoConfig();
+	}
+}
+
+int Platform_GetConfiguredDrawDistance(void)
+{
+	return s_configDrawDistance;
+}
+
+void Platform_SetConfiguredDrawDistance(int scale)
+{
+	if ((scale == 1) || (scale == 2) || (scale == 5) || (scale == 10) || (scale == 20) || (scale == 100))
+	{
+		s_configDrawDistance = scale;
+		Platform_SaveVideoConfig();
+	}
+}
+
+int Platform_GetSkipAllIntro(void)
+{
+	return s_configSkipAllIntro;
+}
+
+void Platform_SetSkipAllIntro(int enabled)
+{
+	s_configSkipAllIntro = enabled != 0;
+	Platform_SaveVideoConfig();
+}
+
+const struct PlatformCheatConfig *Platform_GetCheatConfig(void)
+{
+	return &s_configCheats;
+}
+
+void Platform_SetCheatConfig(const struct PlatformCheatConfig *config)
+{
+	if (config == NULL)
+	{
+		return;
+	}
+
+	s_configCheats = *config;
+	s_configCheats.unlockCharacters = s_configCheats.unlockCharacters != 0;
+	s_configCheats.unlockStages = s_configCheats.unlockStages != 0;
+	s_configCheats.unlockScrapbook = s_configCheats.unlockScrapbook != 0;
+	s_configCheats.originalScrapbook = s_configCheats.originalScrapbook != 0;
+	Platform_SaveVideoConfig();
 }
 
 void Platform_BeginFrame(void)

@@ -237,7 +237,7 @@ data, so the original menu tables remain usable by non-native builds.
   When Scrapbook is available, the order is **HIGH SCORE**, **SCRAPBOOK**,
   **OPTIONS**, **EXIT**. This keeps Exit as the final main-menu item.
 - **OPTIONS** opens a centered native submenu containing **CHEATS** and
-  **BACK**. The menu is explicitly positioned at the native UI center
+  **VIDEO** and **BACK**. The menu is explicitly positioned at the native UI center
   (`256, 160` in the PSX-compatible UI coordinate space), so it remains
   centered independently of the main-menu title animation or output window
   size.
@@ -280,6 +280,36 @@ data, so the original menu tables remain usable by non-native builds.
   centered-layout behavior. The longer Cheats screen uses a native callback so
   it can draw a scrollable ON/OFF list while retaining the same controller
   input conventions and UI ordering-table path.
+
+#### Video menu
+
+- **OPTIONS → VIDEO** provides live graphics controls. Use Up/Down to select a
+  row, Left/Right or Cross/Circle to change its value, and Triangle, Square, or
+  **BACK** to return to Options.
+- **RENDER RES** selects the complete internal engine render-target baseline:
+  **480P** (`854×480`), **720P** (`1280×720`), **1080P** (`1920×1080`),
+  **1440P** (`2560×1440`), or **4K** (`3840×2160`, the default). This does not
+  merely resize the host window. The selected baseline is used when creating
+  the main world, effects, UI, and screen-copy render targets; the native 1.5×
+  supersampling pass is retained for each preset. The new target allocation is
+  applied automatically on the next frame.
+- **FPS MODE** selects **30 FPS** or **60 FPS**. The 60 FPS choice enables the
+  native high-rate path only where it is safe (single-player race gameplay
+  outside demos, cutscenes, arenas, pause states, and end-of-race states).
+  Legacy counters continue to advance at their original cadence, preventing
+  the game-speed and timing regressions caused by driving the PS1 VBlank clock
+  faster than 60 Hz. Unsupported modes automatically use the normal 30 FPS
+  render path.
+- **DRAW DISTANCE** selects the native frustum traversal multiplier:
+  **1×**, **2×**, **5×**, **10×** (the default), **20×**, or **100×**. It changes
+  the far traversal depth used for BSP visibility and therefore controls how
+  much distant level geometry and scenery are considered for drawing. Higher
+  values reduce pop-in but increase CPU and GPU work; 1× is the closest to the
+  retail traversal range.
+- The executable stores the selected resolution, FPS mode, and draw-distance
+  preset in `ctr-native.cfg` beside `ctr_native.exe`. If the file is absent,
+  it is created automatically on first run with the default values: 4K, 60 FPS,
+  and 10× draw distance.
 
 ### Performance expectations
 

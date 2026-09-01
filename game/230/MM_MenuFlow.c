@@ -49,6 +49,15 @@ enum NativeCheatRow
 	NATIVE_CHEAT_COUNT,
 };
 
+enum NativeVideoRow
+{
+	NATIVE_VIDEO_RENDER_RESOLUTION,
+	NATIVE_VIDEO_FPS_MODE,
+	NATIVE_VIDEO_DRAW_DISTANCE,
+	NATIVE_VIDEO_BACK,
+	NATIVE_VIDEO_ROW_COUNT,
+};
+
 struct NativeCheatEntry
 {
 	char *label;
@@ -76,19 +85,19 @@ static struct NativeCheatEntry s_nativeCheatEntries[NATIVE_CHEAT_COUNT] = {
 
 static s16 s_nativeCheatSelected;
 static s16 s_nativeCheatFirstVisible;
-static u32 s_nativeCheatOriginalCharacters;
-static u32 s_nativeCheatOriginalStages;
-static b32 s_nativeCheatCharactersForced;
-static b32 s_nativeCheatStagesForced;
-static b32 s_nativeCheatOriginalScrapbook;
-static b32 s_nativeCheatScrapbookForced;
+static s16 s_nativeVideoSelected;
+static s16 s_nativeModsSelected;
 
 static void MM_NativeOptions_MenuProc(struct RectMenu *menu);
 static void MM_NativeCheats_MenuProc(struct RectMenu *menu);
+static void MM_NativeVideo_MenuProc(struct RectMenu *menu);
+static void MM_NativeMods_MenuProc(struct RectMenu *menu);
 
 static struct MenuRow s_nativeRowsOptions[] = {
-	{RECTMENU_STRING_NATIVE_CHEATS, 1, 1, 0, 0},
-	{RECTMENU_STRING_NATIVE_BACK, 0, 0, 1, 1},
+	{RECTMENU_STRING_NATIVE_VIDEO, 3, 1, 0, 0},
+	{RECTMENU_STRING_NATIVE_CHEATS, 0, 2, 1, 1},
+	{RECTMENU_STRING_NATIVE_MODS, 1, 3, 2, 2},
+	{RECTMENU_STRING_NATIVE_BACK, 2, 0, 3, 3},
 	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
 };
 
@@ -106,6 +115,16 @@ static struct RectMenu s_nativeCheatsMenu = {
 	.funcPtr = MM_NativeCheats_MenuProc,
 };
 
+static struct RectMenu s_nativeVideoMenu = {
+	.state = DISABLE_INPUT_ALLOW_FUNCPTRS,
+	.funcPtr = MM_NativeVideo_MenuProc,
+};
+
+static struct RectMenu s_nativeModsMenu = {
+	.state = DISABLE_INPUT_ALLOW_FUNCPTRS,
+	.funcPtr = MM_NativeMods_MenuProc,
+};
+
 static void MM_NativeOptions_MenuProc(struct RectMenu *menu)
 {
 	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
@@ -115,17 +134,226 @@ static void MM_NativeOptions_MenuProc(struct RectMenu *menu)
 
 	if (menu->rowSelected == 0)
 	{
+		sdata->ptrDesiredMenu = &s_nativeVideoMenu;
+	}
+	else if (menu->rowSelected == 1)
+	{
 		sdata->ptrDesiredMenu = &s_nativeCheatsMenu;
+	}
+	else if (menu->rowSelected == 2)
+	{
+		sdata->ptrDesiredMenu = &s_nativeModsMenu;
 	}
 	else
 	{
+		// Native submenus keep the title scene active in the background, so they
+		// must return directly.  Applying the retail return transition here would
+		// animate Crash/trophy from an off-screen position it never moved to.
 		sdata->ptrDesiredMenu = &D230.menuMainMenu;
+		RECTMENU_ClearInput();
 	}
+}
+
+static void MM_NativeMods_Draw(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	int centerX = gGT->pushBuffer_UI.rect.x + (gGT->pushBuffer_UI.rect.w / 2);
+	RECT background = {centerX - 130, 65, 260, 90};
+
+	CTR_Box_DrawClearBox(&background, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+	DecalFont_DrawLine("MODS", centerX, 70, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+	for (s16 row = 0; row < 2; row++)
+	{
+		s16 y = 98 + row * 20;
+		if (row == s_nativeModsSelected)
+		{
+			RECT highlight = {centerX - 124, y - 1, 248, 17};
+			CTR_Box_DrawClearBox(&highlight, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+		}
+		DecalFont_DrawLine(row == 0 ? "SKIP ALL INTRO" : "BACK", centerX - 118, y, FONT_SMALL, WHITE);
+		if (row == 0)
+			DecalFont_DrawLine(Platform_GetSkipAllIntro() ? "ON" : "OFF", centerX + 118, y, FONT_SMALL, JUSTIFY_RIGHT | ORANGE);
+	}
+}
+
+static void MM_NativeMods_MenuProc(struct RectMenu *menu)
+{
+	u32 buttons = sdata->buttonTapPerPlayer[0];
+	(void)menu;
+
+	if ((buttons & (BTN_UP | BTN_DOWN)) != 0)
+	{
+		s_nativeModsSelected ^= 1;
+		OtherFX_Play(0, 1);
+	}
+	else if ((buttons & (BTN_CROSS_one | BTN_CIRCLE)) != 0)
+	{
+		if (s_nativeModsSelected == 0)
+		{
+			Platform_SetSkipAllIntro(!Platform_GetSkipAllIntro());
+			OtherFX_Play(1, 1);
+		}
+		else
+		{
+			sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		}
+	}
+	else if ((buttons & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0)
+	{
+		sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		OtherFX_Play(2, 1);
+	}
+
+	MM_NativeMods_Draw();
+	RECTMENU_ClearInput();
+}
+
+static char *MM_NativeVideo_GetValue(s16 row)
+{
+	static char *resolutionLabels[] = {"480P", "720P", "1080P", "1440P", "4K"};
+	static char *distanceLabels[] = {"1X", "2X", "5X", "10X", "20X", "100X"};
+	int scale;
+
+	switch (row)
+	{
+		case NATIVE_VIDEO_RENDER_RESOLUTION:
+			return resolutionLabels[Platform_GetVideoResolutionPreset()];
+		case NATIVE_VIDEO_FPS_MODE:
+			return CTR_60HzMode_GetTargetFPS() == 30 ? "30 FPS" : (CTR_60HzMode_GetTargetFPS() == 60 ? "60 FPS" : "120 FPS");
+		case NATIVE_VIDEO_DRAW_DISTANCE:
+			scale = PushBuffer_GetTraversalScale();
+			for (s16 i = 0; i < 6; i++)
+			{
+				if (scale == (int[]){1, 2, 5, 10, 20, 100}[i])
+				{
+					return distanceLabels[i];
+				}
+			}
+			return "10X";
+	}
+
+	return "";
+}
+
+static void MM_NativeVideo_Adjust(s16 row, int direction)
+{
+	static int distanceScales[] = {1, 2, 5, 10, 20, 100};
+	int value;
+
+	if (row == NATIVE_VIDEO_RENDER_RESOLUTION)
+	{
+		value = Platform_GetVideoResolutionPreset() + direction;
+		if (value < 0)
+			value = 4;
+		if (value > 4)
+			value = 0;
+		Platform_SetVideoResolutionPreset(value);
+	}
+	else if (row == NATIVE_VIDEO_FPS_MODE)
+	{
+		value = CTR_60HzMode_GetTargetFPS();
+		value = value == 30 ? 60 : (value == 60 ? 120 : 30);
+		CTR_60HzMode_SetTargetFPS(value);
+		Platform_SetConfiguredFPS(value);
+	}
+	else if (row == NATIVE_VIDEO_DRAW_DISTANCE)
+	{
+		value = 0;
+		for (s16 i = 0; i < 6; i++)
+		{
+			if (PushBuffer_GetTraversalScale() == distanceScales[i])
+			{
+				value = i;
+				break;
+			}
+		}
+		value = (value + direction + 6) % 6;
+		PushBuffer_SetTraversalScale(distanceScales[value]);
+		Platform_SetConfiguredDrawDistance(distanceScales[value]);
+	}
+}
+
+static void MM_NativeVideo_Draw(void)
+{
+	static char *labels[NATIVE_VIDEO_ROW_COUNT] = {"RENDER RES", "FPS MODE", "DRAW DISTANCE", "BACK"};
+	struct GameTracker *gGT = sdata->gGT;
+	int centerX = gGT->pushBuffer_UI.rect.x + (gGT->pushBuffer_UI.rect.w / 2);
+	const s16 firstY = 72;
+	const s16 rowHeight = data.font_charPixHeight[FONT_SMALL] + 6;
+	RECT background = {centerX - 120, 45, 240, 130};
+
+	CTR_Box_DrawClearBox(&background, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+	DecalFont_DrawLine("VIDEO", centerX, 50, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+
+	for (s16 row = 0; row < NATIVE_VIDEO_ROW_COUNT; row++)
+	{
+		s16 y = firstY + row * rowHeight;
+
+		if (row == s_nativeVideoSelected)
+		{
+			RECT highlight = {centerX - 114, y - 1, 228, rowHeight};
+			CTR_Box_DrawClearBox(&highlight, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+		}
+
+		DecalFont_DrawLine(labels[row], centerX - 108, y, FONT_SMALL, WHITE);
+		if (row != NATIVE_VIDEO_BACK)
+		{
+			DecalFont_DrawLine(MM_NativeVideo_GetValue(row), centerX + 108, y, FONT_SMALL, JUSTIFY_RIGHT | ORANGE);
+		}
+	}
+
+	DecalFont_DrawLine("LEFT/RIGHT: CHANGE", centerX, 155, FONT_SMALL, JUSTIFY_CENTER | WHITE);
+}
+
+static void MM_NativeVideo_MenuProc(struct RectMenu *menu)
+{
+	u32 buttons = sdata->buttonTapPerPlayer[0];
+	(void)menu;
+
+	if ((buttons & BTN_UP) != 0)
+	{
+		s_nativeVideoSelected = (s_nativeVideoSelected + NATIVE_VIDEO_ROW_COUNT - 1) % NATIVE_VIDEO_ROW_COUNT;
+		OtherFX_Play(0, 1);
+	}
+	else if ((buttons & BTN_DOWN) != 0)
+	{
+		s_nativeVideoSelected = (s_nativeVideoSelected + 1) % NATIVE_VIDEO_ROW_COUNT;
+		OtherFX_Play(0, 1);
+	}
+	else if ((buttons & BTN_LEFT) != 0 || (buttons & BTN_RIGHT) != 0)
+	{
+		if (s_nativeVideoSelected != NATIVE_VIDEO_BACK)
+		{
+			MM_NativeVideo_Adjust(s_nativeVideoSelected, (buttons & BTN_LEFT) != 0 ? -1 : 1);
+			OtherFX_Play(0, 1);
+		}
+	}
+	else if ((buttons & (BTN_CROSS_one | BTN_CIRCLE)) != 0)
+	{
+		if (s_nativeVideoSelected == NATIVE_VIDEO_BACK)
+		{
+			sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		}
+		else
+		{
+			MM_NativeVideo_Adjust(s_nativeVideoSelected, 1);
+			OtherFX_Play(1, 1);
+		}
+	}
+	else if ((buttons & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0)
+	{
+		sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		OtherFX_Play(2, 1);
+	}
+
+	MM_NativeVideo_Draw();
+	RECTMENU_ClearInput();
 }
 
 static b32 MM_NativeCheats_IsEnabled(s16 row)
 {
 	struct GameTracker *gGT = sdata->gGT;
+	const struct PlatformCheatConfig *config = Platform_GetCheatConfig();
 
 	if (s_nativeCheatEntries[row].gameModeFlag != 0)
 	{
@@ -135,11 +363,11 @@ static b32 MM_NativeCheats_IsEnabled(s16 row)
 	switch (row)
 	{
 		case NATIVE_CHEAT_UNLOCK_CHARACTERS:
-			return (sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS) == UNLOCK_CHARACTERS;
+			return config->unlockCharacters;
 		case NATIVE_CHEAT_UNLOCK_STAGES:
-			return (sdata->gameProgress.unlocks[0] & GAME_UNLOCK_TRACKS_MASK) == GAME_UNLOCK_TRACKS_MASK;
+			return config->unlockStages;
 		case NATIVE_CHEAT_UNLOCK_SCRAPBOOK:
-			return CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+			return config->unlockScrapbook;
 	}
 
 	return 0;
@@ -148,60 +376,65 @@ static b32 MM_NativeCheats_IsEnabled(s16 row)
 static void MM_NativeCheats_Toggle(s16 row)
 {
 	struct GameTracker *gGT = sdata->gGT;
+	struct PlatformCheatConfig config = *Platform_GetCheatConfig();
 
 	if (s_nativeCheatEntries[row].gameModeFlag != 0)
 	{
 		gGT->gameMode2 ^= s_nativeCheatEntries[row].gameModeFlag;
+		config.gameModeFlags = gGT->gameMode2 & CHEAT_ALL;
+		Platform_SetCheatConfig(&config);
 		return;
 	}
 
 	switch (row)
 	{
 		case NATIVE_CHEAT_UNLOCK_CHARACTERS:
-			if (!s_nativeCheatCharactersForced)
+			if (!config.unlockCharacters)
 			{
-				s_nativeCheatOriginalCharacters = sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS;
+				config.originalCharacters = sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS;
 				sdata->gameProgress.unlockFlags |= UNLOCK_CHARACTERS;
-				s_nativeCheatCharactersForced = 1;
+				config.unlockCharacters = 1;
 			}
 			else
 			{
-				sdata->gameProgress.unlockFlags = (sdata->gameProgress.unlockFlags & ~UNLOCK_CHARACTERS) | s_nativeCheatOriginalCharacters;
-				s_nativeCheatCharactersForced = 0;
+				sdata->gameProgress.unlockFlags = (sdata->gameProgress.unlockFlags & ~UNLOCK_CHARACTERS) | config.originalCharacters;
+				config.unlockCharacters = 0;
 			}
 			break;
 
 		case NATIVE_CHEAT_UNLOCK_STAGES:
-			if (!s_nativeCheatStagesForced)
+			if (!config.unlockStages)
 			{
-				s_nativeCheatOriginalStages = sdata->gameProgress.unlocks[0] & GAME_UNLOCK_TRACKS_MASK;
+				config.originalStages = sdata->gameProgress.unlocks[0] & GAME_UNLOCK_TRACKS_MASK;
 				sdata->gameProgress.unlocks[0] |= GAME_UNLOCK_TRACKS_MASK;
-				s_nativeCheatStagesForced = 1;
+				config.unlockStages = 1;
 			}
 			else
 			{
-				sdata->gameProgress.unlocks[0] = (sdata->gameProgress.unlocks[0] & ~GAME_UNLOCK_TRACKS_MASK) | s_nativeCheatOriginalStages;
-				s_nativeCheatStagesForced = 0;
+				sdata->gameProgress.unlocks[0] = (sdata->gameProgress.unlocks[0] & ~GAME_UNLOCK_TRACKS_MASK) | config.originalStages;
+				config.unlockStages = 0;
 			}
 			break;
 
 		case NATIVE_CHEAT_UNLOCK_SCRAPBOOK:
-			if (!s_nativeCheatScrapbookForced)
+			if (!config.unlockScrapbook)
 			{
-				s_nativeCheatOriginalScrapbook = CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+				config.originalScrapbook = CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
 				UNLOCK_MEMCARD_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
-				s_nativeCheatScrapbookForced = 1;
+				config.unlockScrapbook = 1;
 			}
 			else
 			{
-				if (!s_nativeCheatOriginalScrapbook)
+				if (!config.originalScrapbook)
 				{
 					sdata->gameProgress.unlocks[MEMCARD_BIT_WORD(GAME_UNLOCK_BIT_SCRAPBOOK)] &= ~MEMCARD_BIT_MASK(GAME_UNLOCK_BIT_SCRAPBOOK);
 				}
-				s_nativeCheatScrapbookForced = 0;
+				config.unlockScrapbook = 0;
 			}
 			break;
 	}
+
+	Platform_SetCheatConfig(&config);
 }
 
 static void MM_NativeCheats_Draw(void)
@@ -245,6 +478,7 @@ static void MM_NativeCheats_Draw(void)
 static void MM_NativeCheats_MenuProc(struct RectMenu *menu)
 {
 	u32 buttons = sdata->buttonTapPerPlayer[0];
+	(void)menu;
 
 	if ((buttons & BTN_UP) != 0)
 	{
@@ -410,8 +644,15 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// if "title" object exists
 	if (titleObj != NULL)
 	{
-		// CameraPosOffset X
+		// Character selection moves the title camera while its models are off
+		// screen.  Restore the complete title-view state on every main-menu
+		// update; resetting only X leaves stale Y/Z or perspective values after
+		// returning from a submenu.
 		titleObj->cameraPosOffset.x = 0;
+		titleObj->cameraPosOffset.y = 0;
+		titleObj->cameraPosOffset.z = 0;
+		gGT->pushBuffer[0].distanceToScreen_PREV = TITLE_INTRO_DISTANCE_TO_SCREEN;
+		gGT->pushBuffer[0].distanceToScreen_CURR = TITLE_INTRO_DISTANCE_TO_SCREEN;
 	}
 
 	// if you are at highest level of menu hierarchy

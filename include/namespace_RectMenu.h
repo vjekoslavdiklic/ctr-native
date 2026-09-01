@@ -5,6 +5,8 @@
 // They remain below MENU_ROW_LNG_MASK and above every retail language string.
 #define RECTMENU_STRING_NATIVE_BACK 0x7ffd
 #define RECTMENU_STRING_NATIVE_CHEATS 0x7ffe
+#define RECTMENU_STRING_NATIVE_VIDEO 0x7ffc
+#define RECTMENU_STRING_NATIVE_MODS 0x7ffb
 
 enum MenuFlags
 {

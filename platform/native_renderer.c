@@ -47,6 +47,16 @@ extern SDL_Window *g_window;
 #define NATIVE_ENGINE_RENDER_MAX_WIDTH           (7680)
 #define NATIVE_ENGINE_RENDER_MAX_HEIGHT          (4320)
 
+enum NativeRendererInternalResolutionPreset
+{
+	NATIVE_RENDER_RESOLUTION_480P,
+	NATIVE_RENDER_RESOLUTION_720P,
+	NATIVE_RENDER_RESOLUTION_1080P,
+	NATIVE_RENDER_RESOLUTION_1440P,
+	NATIVE_RENDER_RESOLUTION_4K,
+	NATIVE_RENDER_RESOLUTION_PRESET_COUNT,
+};
+
 #if defined(CTR_INTERNAL)
 #ifndef GL_TIME_ELAPSED
 #define GL_TIME_ELAPSED 0x88BF
@@ -138,6 +148,7 @@ int g_dbg_wireframeMode = 0;
 int g_dbg_texturelessMode = 0;
 
 int g_cfg_bilinearFiltering = 1;
+global_variable int s_internalResolutionPreset = NATIVE_RENDER_RESOLUTION_4K;
 
 // NOTE(aalhendi): Pack native RGBA render targets into the persistent RG8 VRAM
 // texture on the GPU instead of a GPU-to-CPU-to-GPU round trip.
@@ -329,6 +340,21 @@ void NativeRenderer_UpdateSwapIntervalState(int swapInterval)
 	SDL_GL_SetSwapInterval(swapInterval);
 }
 
+int NativeRenderer_GetInternalResolutionPreset(void)
+{
+	return s_internalResolutionPreset;
+}
+
+void NativeRenderer_SetInternalResolutionPreset(int preset)
+{
+	if ((preset < NATIVE_RENDER_RESOLUTION_480P) || (preset >= NATIVE_RENDER_RESOLUTION_PRESET_COUNT))
+	{
+		return;
+	}
+
+	s_internalResolutionPreset = preset;
+}
+
 void NativeRenderer_BeginScene(void)
 {
 #if defined(CTR_INTERNAL)
@@ -462,17 +488,28 @@ internal void NativeRenderer_SetPresentationAspect(int width, int height)
 
 internal void NativeRenderer_GetMainTargetSize(int logicalWidth, int logicalHeight, int *targetWidth, int *targetHeight)
 {
-	int width = g_windowWidth;
-	int height = g_windowHeight;
+	int width = NATIVE_ENGINE_RENDER_WIDTH_4K;
+	int height = NATIVE_ENGINE_RENDER_HEIGHT_4K;
 
-	if (width < NATIVE_ENGINE_RENDER_WIDTH_4K)
+	if (s_internalResolutionPreset == NATIVE_RENDER_RESOLUTION_480P)
 	{
-		width = NATIVE_ENGINE_RENDER_WIDTH_4K;
+		width = 854;
+		height = 480;
 	}
-
-	if (height < NATIVE_ENGINE_RENDER_HEIGHT_4K)
+	else if (s_internalResolutionPreset == NATIVE_RENDER_RESOLUTION_720P)
 	{
-		height = NATIVE_ENGINE_RENDER_HEIGHT_4K;
+		width = 1280;
+		height = 720;
+	}
+	else if (s_internalResolutionPreset == NATIVE_RENDER_RESOLUTION_1080P)
+	{
+		width = 1920;
+		height = 1080;
+	}
+	else if (s_internalResolutionPreset == NATIVE_RENDER_RESOLUTION_1440P)
+	{
+		width = 2560;
+		height = 1440;
 	}
 
 	if (logicalWidth <= 0)

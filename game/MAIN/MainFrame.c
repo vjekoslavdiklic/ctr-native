@@ -29,10 +29,29 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 static int s_native60HzLegacyFrameAdvanceCount = 1;
 static int s_native60HzLegacyVblankCarry = 0;
 static int s_native60HzPrevVblankCounter = -1;
+static int s_nativeTargetFPS = 60;
+static b32 s_nativeVideoConfigLoaded;
+
+void CTR_60HzMode_SetTargetFPS(int fps)
+{
+	if ((fps == 30) || (fps == 60) || (fps == 120))
+	{
+		s_nativeTargetFPS = fps;
+	}
+}
+
+int CTR_60HzMode_GetTargetFPS(void)
+{
+	return s_nativeTargetFPS;
+}
 
 b32 CTR_60HzMode_IsEnabled(const struct GameTracker *gGT)
 {
 	if (gGT == NULL)
+	{
+		return false;
+	}
+	if (s_nativeTargetFPS == 30)
 	{
 		return false;
 	}
@@ -65,6 +84,13 @@ void CTR_60HzMode_BeginFrame(struct GameTracker *gGT)
 	int currentVblankCounter;
 	int deltaVblanks;
 
+	if (!s_nativeVideoConfigLoaded)
+	{
+		CTR_60HzMode_SetTargetFPS(Platform_GetConfiguredFPS());
+		PushBuffer_SetTraversalScale(Platform_GetConfiguredDrawDistance());
+		s_nativeVideoConfigLoaded = 1;
+	}
+
 	if (!CTR_60HzMode_IsEnabled(gGT))
 	{
 		s_native60HzLegacyFrameAdvanceCount = 1;
@@ -91,8 +117,11 @@ void CTR_60HzMode_BeginFrame(struct GameTracker *gGT)
 
 	s_native60HzPrevVblankCounter = currentVblankCounter;
 	s_native60HzLegacyVblankCarry += deltaVblanks;
-	s_native60HzLegacyFrameAdvanceCount = s_native60HzLegacyVblankCarry >> 1;
-	s_native60HzLegacyVblankCarry &= 1;
+	{
+		const int legacyFrameDivisor = 2;
+		s_native60HzLegacyFrameAdvanceCount = s_native60HzLegacyVblankCarry / legacyFrameDivisor;
+		s_native60HzLegacyVblankCarry %= legacyFrameDivisor;
+	}
 
 	if (s_native60HzLegacyFrameAdvanceCount > 1)
 	{

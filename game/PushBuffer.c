@@ -3,11 +3,11 @@
 #ifdef CTR_NATIVE
 enum
 {
-	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM = 10,
-	CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN = 1,
 	CTR_NATIVE_RENDER_CAMERA_BLEND_NUM = 3,
 	CTR_NATIVE_RENDER_CAMERA_BLEND_DEN = 4,
 };
+
+static int s_nativeFrustumTraversalScale = 10;
 
 static b32 s_nativeRenderCameraValid[4];
 static Vec3 s_nativeRenderCameraPos[4];
@@ -17,7 +17,20 @@ static SVec3 s_nativeRenderCameraRawPrevRot[4];
 
 static int PushBuffer_ScaleTraversalDepth(int depth)
 {
-	return (depth * CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_NUM) / CTR_NATIVE_FRUSTUM_TRAVERSAL_SCALE_DEN;
+	return depth * s_nativeFrustumTraversalScale;
+}
+
+int PushBuffer_GetTraversalScale(void)
+{
+	return s_nativeFrustumTraversalScale;
+}
+
+void PushBuffer_SetTraversalScale(int scale)
+{
+	if ((scale >= 1) && (scale <= 100))
+	{
+		s_nativeFrustumTraversalScale = scale;
+	}
 }
 
 static s32 PushBuffer_BlendRenderCameraAxis(s32 curr, s32 prev)
@@ -74,6 +87,16 @@ void PushBuffer_GetNativeRenderCameraState(const struct PushBuffer *pb, Vec3 *po
 	pos->z = pb->pos.z;
 	*rot = pb->rot;
 
+	// The title/menu camera is authored as a direct camera path.  Its render
+	// matrix is built from the raw PushBuffer state because 60 Hz interpolation
+	// is disabled for MAIN_MENU, so object transforms must use that same raw
+	// state.  Otherwise a cached race camera can survive a submenu transition
+	// and make the title trophy/Crash appear at the wrong size and position.
+	if (!CTR_60HzMode_IsEnabled(sdata->gGT))
+	{
+		return;
+	}
+
 	if ((cameraID < 0) || (cameraID >= 4) || !s_nativeRenderCameraValid[cameraID])
 	{
 		return;
@@ -86,6 +109,16 @@ void PushBuffer_GetNativeRenderCameraState(const struct PushBuffer *pb, Vec3 *po
 static int PushBuffer_ScaleTraversalDepth(int depth)
 {
 	return depth;
+}
+
+int PushBuffer_GetTraversalScale(void)
+{
+	return 1;
+}
+
+void PushBuffer_SetTraversalScale(int scale)
+{
+	(void)scale;
 }
 #endif
 

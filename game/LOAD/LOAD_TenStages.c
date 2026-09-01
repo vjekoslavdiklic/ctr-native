@@ -64,9 +64,18 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 			sdata->boolFirstBoot = 0;
 
-			// Load Intro TIM for Copyright Page from VRAM file
-			LOAD_VramFile(bigfile, LOAD_FIRST_BOOT_COPYRIGHT_TIM_BIGFILE_INDEX, NULL, &vramSize, -1);
-			MainInit_VRAMDisplay();
+			// The copyright/logo page is a separate startup screen between the
+			// SCEA splash and the first level.  Keep the initialization path, but
+			// do not display or wait on it when the native skip-all-intro setting
+			// is enabled.
+#if defined(CTR_NATIVE)
+			const b32 skipAllIntro = Platform_GetSkipAllIntro();
+			if (!skipAllIntro)
+#endif
+			{
+				LOAD_VramFile(bigfile, LOAD_FIRST_BOOT_COPYRIGHT_TIM_BIGFILE_INDEX, NULL, &vramSize, -1);
+				MainInit_VRAMDisplay();
+			}
 
 #ifdef CTR_NATIVE
 			// NOTE(aalhendi): SCEA is already held by XA playback in MainMain. The copyright
@@ -74,7 +83,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			// the point retail normally reaches while loading the ND crate.
 			// Present every wait tick so both host swapchain images are
 			// overwritten with copyright instead of briefly revealing SCEA.
-			while (((sdata->songPool[0].flags & 3) == 1) && (sdata->songPool[0].timeSpentPlaying < LOAD_NATIVE_NDBOX_INTRO_SONG_SYNC_TIME))
+			while (!skipAllIntro && ((sdata->songPool[0].flags & 3) == 1) && (sdata->songPool[0].timeSpentPlaying < LOAD_NATIVE_NDBOX_INTRO_SONG_SYNC_TIME))
 			{
 				VSync(0);
 				Platform_PresentVRAMDisplay();

@@ -12,6 +12,8 @@ void NativeRenderer_EndScene(void);
 void NativeRenderer_EndGpuFrame(void);
 void NativeRenderer_FinishGpuMeasurements(void);
 void NativeRenderer_UpdateSwapIntervalState(int swapInterval);
+int NativeRenderer_GetInternalResolutionPreset(void);
+void NativeRenderer_SetInternalResolutionPreset(int preset);
 void NativeRenderer_SwapWindow(void);
 void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h);
 void NativeRenderer_PresentMainRenderTarget(void);

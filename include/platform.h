@@ -10,6 +10,19 @@ struct PlatformMempackArena
 	int backingSize;
 };
 
+// Native-only settings stored beside the executable.  Unlock originals are
+// retained so turning an unlock cheat back off restores real game progress.
+struct PlatformCheatConfig
+{
+	unsigned int gameModeFlags;
+	unsigned int originalCharacters;
+	unsigned int originalStages;
+	int originalScrapbook;
+	int unlockCharacters;
+	int unlockStages;
+	int unlockScrapbook;
+};
+
 void Platform_Init(const char *title, int width, int height);
 void Platform_Shutdown(void);
 void Platform_InitScratchpad(void);
@@ -30,6 +43,16 @@ int Platform_PollInput(void);
 #if defined(CTR_NATIVE)
 void Platform_RequestQuit(void);
 int NikoGetEnterKey(void);
+int Platform_GetVideoResolutionPreset(void);
+void Platform_SetVideoResolutionPreset(int preset);
+int Platform_GetConfiguredFPS(void);
+void Platform_SetConfiguredFPS(int fps);
+int Platform_GetConfiguredDrawDistance(void);
+void Platform_SetConfiguredDrawDistance(int scale);
+int Platform_GetSkipAllIntro(void);
+void Platform_SetSkipAllIntro(int enabled);
+const struct PlatformCheatConfig *Platform_GetCheatConfig(void);
+void Platform_SetCheatConfig(const struct PlatformCheatConfig *config);
 #endif
 
 #endif

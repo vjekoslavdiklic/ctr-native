@@ -611,9 +611,37 @@ void StateZero()
 	// PAL SCES02105 calls it multiple times
 	LOAD_LangFile((int)sdata->ptrBigfile1, 1);
 	GAMEPROG_NewGame_OnBoot();
+#if defined(CTR_NATIVE)
+	// Reapply native cheat-menu choices after the boot profile has been
+	// initialized.  Gameplay flags are kept separate from progress unlocks.
+	{
+		const struct PlatformCheatConfig *cheats = Platform_GetCheatConfig();
+		gGT->gameMode2 = (gGT->gameMode2 & ~CHEAT_ALL) | (cheats->gameModeFlags & CHEAT_ALL);
+		if (cheats->unlockCharacters)
+			sdata->gameProgress.unlockFlags |= UNLOCK_CHARACTERS;
+		if (cheats->unlockStages)
+			sdata->gameProgress.unlocks[0] |= GAME_UNLOCK_TRACKS_MASK;
+		if (cheats->unlockScrapbook)
+			UNLOCK_MEMCARD_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+	}
+#endif
 	gGT->overlayIndex_null_notUsed = 0;
 
-	gGT->levelID = NAUGHTY_DOG_CRATE;
+	// The retail boot sequence begins in the Naughty Dog crate level and only
+	// reaches the title menu after its startup cutscenes.  Apply the native
+	// skip-all-intro setting here, before the first ten-stage level load, so no
+	// startup level or video is entered at all.
+#if defined(CTR_NATIVE)
+	if (Platform_GetSkipAllIntro())
+	{
+		gGT->levelID = MAIN_MENU_LEVEL;
+		sdata->mainMenuState = MAIN_MENU_TITLE;
+	}
+	else
+#endif
+	{
+		gGT->levelID = NAUGHTY_DOG_CRATE;
+	}
 	memcpy(gGT->levelName, sdata->s_ndi, sizeof(sdata->s_ndi));
 	// gGT->levelID = OXIDE_TRUE_ENDING;
 
@@ -638,9 +666,17 @@ void StateZero()
 	PutDrawEnv(&gGT->db[1].drawEnv);
 	DrawSync(0);
 
-	// Load Intro TIM for "SCEA Presents" from VRAM file
-	LOAD_VramFile(sdata->ptrBigfile1, 0x1fd, NULL, &vramSize, -1);
-	MainInit_VRAMDisplay();
+	// The SCEA image is a boot-only display.  Skip its presentation when the
+	// native mod is enabled, but keep the regular audio/menu initialization
+	// below so the main-menu load behaves exactly as usual.
+#if defined(CTR_NATIVE)
+	const b32 skipAllIntro = Platform_GetSkipAllIntro();
+	if (!skipAllIntro)
+#endif
+	{
+		LOAD_VramFile(sdata->ptrBigfile1, 0x1fd, NULL, &vramSize, -1);
+		MainInit_VRAMDisplay();
+	}
 
 	// \SOUNDS\KART.HWL;1
 	// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c8e0-0x8003c928 for startup HOWL/music/XA setup.
@@ -653,19 +689,29 @@ void StateZero()
 	CseqMusic_Start(CSEQ_SONG_LEVEL, 0, NULL, 0, 0);
 	Music_Start(0);
 
-	// "Start your engines, for Sony Computer..."
-	CDSYS_XAPlay(CDSYS_XA_TYPE_EXTRA, 0x50);
-
-	while (sdata->XA_State != 0)
-	{
-		// WARNING: Read-only address (ram, 0x8008d888) is written
-		// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c940-0x8003c948 for startup XA pause polling.
-#ifdef CTR_NATIVE
-		// NOTE(aalhendi): Retail hardware interrupts keep XA/audio moving while
-		// this loop spins. Native owns VBlank in VSync(), so pump it here.
-		VSync(0);
+	// The SCEA narration is what deliberately holds the boot splash on-screen.
+	// Do not start or wait for it in skip-all-intro mode.
+	if (
+#if defined(CTR_NATIVE)
+		!skipAllIntro
+#else
+		true
 #endif
-		CDSYS_XAPauseAtEnd();
+	)
+	{
+		CDSYS_XAPlay(CDSYS_XA_TYPE_EXTRA, 0x50);
+
+		while (sdata->XA_State != 0)
+		{
+			// WARNING: Read-only address (ram, 0x8008d888) is written
+			// NOTE(aalhendi): ASM-verified NTSC-U 926 0x8003c940-0x8003c948 for startup XA pause polling.
+#ifdef CTR_NATIVE
+			// NOTE(aalhendi): Retail hardware interrupts keep XA/audio moving while
+			// this loop spins. Native owns VBlank in VSync(), so pump it here.
+			VSync(0);
+#endif
+			CDSYS_XAPauseAtEnd();
+		}
 	}
 
 	DecalGlobal_Clear(gGT);

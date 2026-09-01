@@ -374,6 +374,8 @@ void MainDrawCb_DrawSync(void);
 
 #if defined(CTR_NATIVE)
 b32 CTR_60HzMode_IsEnabled(const struct GameTracker *gGT);
+void CTR_60HzMode_SetTargetFPS(int fps);
+int CTR_60HzMode_GetTargetFPS(void);
 void CTR_60HzMode_BeginFrame(struct GameTracker *gGT);
 int CTR_60HzMode_GetLegacyFrameAdvanceCount(void);
 int CTR_60HzMode_GetFlipVsyncs(const struct GameTracker *gGT);
@@ -610,6 +612,8 @@ void PROC_StartSearch_Self(struct ScratchpadStruct *sps);
 void ThTick_SetAndExec(struct Thread *thread, void (*funcThTick)(struct Thread *));
 
 void PushBuffer_Init(struct PushBuffer *pb, int id, int total);
+int PushBuffer_GetTraversalScale(void);
+void PushBuffer_SetTraversalScale(int scale);
 void PushBuffer_UpdateFrustum(struct PushBuffer *pb);
 #if defined(CTR_NATIVE)
 s32 PushBuffer_GetFrustumSavedCameraZ(void);
