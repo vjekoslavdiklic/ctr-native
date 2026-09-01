@@ -228,10 +228,58 @@ modern CPU and GPU resources.
 
 ### Native usability additions
 
-- The bottom of the main menu includes an **EXIT** item (after **HIGH SCORE**,
-  or after **SCRAPBOOK** when it is unlocked). Selecting it closes the game
-  through the normal orderly native shutdown path, the same as closing the game
-  window.
+The native menu additions are intentionally separate from the retail overlay
+data, so the original menu tables remain usable by non-native builds.
+
+#### Main menu, Options, and Exit
+
+- The bottom of the main menu is now **HIGH SCORE**, **OPTIONS**, **EXIT**.
+  When Scrapbook is available, the order is **HIGH SCORE**, **SCRAPBOOK**,
+  **OPTIONS**, **EXIT**. This keeps Exit as the final main-menu item.
+- **OPTIONS** opens a centered native submenu containing **CHEATS** and
+  **BACK**. The menu is explicitly positioned at the native UI center
+  (`256, 160` in the PSX-compatible UI coordinate space), so it remains
+  centered independently of the main-menu title animation or output window
+  size.
+- **EXIT** calls the native orderly shutdown routine, matching a normal window
+  close instead of leaving the process running in the background.
+
+#### Cheats menu
+
+- **OPTIONS → CHEATS** opens a scrollable, high-resolution native menu. It
+  displays eleven entries at once, keeps the selected row visible while
+  scrolling, and renders an explicit **ON** or **OFF** state beside every
+  toggle.
+- To keep the compact menu readable, every visible entry label is 16
+  characters or fewer. Use Up/Down to move, Cross or Circle to toggle the
+  selected item, and Triangle, Square, or the **BACK** row to return to
+  Options.
+- Built-in gameplay cheats exposed by the menu are: **MAX WUMPA FRUIT**,
+  **INFINITE MASKS**, **MAX TURBOS**, **INVISIBILITY**, **MAX ENGINE**,
+  **MAX BOMBS**, **ADV DIFFICULTY**, **SUPER HARD**, **ICY TRACKS**,
+  **SUPER TURBO PADS**, **ONE LAP RACES**, and **TURBO COUNTER**. These map to
+  the engine's existing gameplay-cheat flags and can be toggled both on and
+  off without needing to enter the original controller sequences.
+- The menu also exposes **ALL CHARACTERS**, **TRACKS & ARENAS**, and **UNLOCK
+  SCRAPBOOK**. Tracks & Arenas unlocks Turbo Track plus the Parking Lot, North
+  Bowl, and Lab Basement battle arenas.
+- Unlock toggles remember the relevant unlock bits when first enabled. Turning
+  a toggle off during the same session restores those saved bits, preserving
+  progress that existed before the cheat was enabled rather than simply
+  clearing all unlock data.
+- The Spyro launcher code is deliberately not included: it is a separate-game
+  launch action, not a CTR gameplay cheat.
+
+#### Menu implementation notes
+
+- Native-only menu string identifiers provide the custom **CHEATS** and
+  **BACK** labels without consuming or overwriting entries in CTR's localized
+  language table. Retail menu rows continue to use their normal language
+  indexes.
+- The Options screen uses the standard `RectMenu` input, highlight, sound, and
+  centered-layout behavior. The longer Cheats screen uses a native callback so
+  it can draw a scrollable ON/OFF list while retaining the same controller
+  input conventions and UI ordering-table path.
 
 ### Performance expectations
 

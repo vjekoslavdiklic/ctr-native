@@ -1,5 +1,26 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+static char s_rectMenuNativeCheats[] = "CHEATS";
+static char s_rectMenuNativeBack[] = "BACK";
+#endif
+
+static char *RECTMENU_GetString(s16 stringIndex)
+{
+#if defined(CTR_NATIVE)
+	if ((u16)stringIndex == RECTMENU_STRING_NATIVE_CHEATS)
+	{
+		return s_rectMenuNativeCheats;
+	}
+	if ((u16)stringIndex == RECTMENU_STRING_NATIVE_BACK)
+	{
+		return s_rectMenuNativeBack;
+	}
+#endif
+
+	return sdata->lngStrings[stringIndex & MENU_ROW_LNG_MASK];
+}
+
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 0x80044ef8-0x80044f90.
 void RECTMENU_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *primMem, uint32_t *ot, u32 color0, u32 color1, u32 color2, u32 color3,
@@ -438,7 +459,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 	for (row = m->rows; row->stringIndex != -1; row++)
 	{
 		// width of string in each row
-		lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[row->stringIndex & 0x7fff], fontType);
+		lineWidth = DecalFont_GetLineWidth(RECTMENU_GetString(row->stringIndex), fontType);
 
 		// set new width if new max is found
 		if (*width < (lineWidth + 1))
@@ -458,7 +479,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b32 boolCheckSubmenu)
 		}
 
 		// width of string in each row
-		lineWidth = DecalFont_GetLineWidth(sdata->lngStrings[m->stringIndexTitle & 0x7fff], fontType);
+		lineWidth = DecalFont_GetLineWidth(RECTMENU_GetString(m->stringIndexTitle), fontType);
 
 		// set new width if new max is found
 		if (*width < (lineWidth + 1))
@@ -585,12 +606,12 @@ LAB_80045e94:
 			{
 				uVar5 = uVar8 | 0x8000;
 			}
-			titleString = sdata->lngStrings[index];
+			titleString = RECTMENU_GetString(index);
 		}
 		else
 		{
 			uVar5 = uVar8 | 0x8000;
-			titleString = sdata->lngStrings[index];
+			titleString = RECTMENU_GetString(index);
 			offsetX = (s16)(posX + menu->posX_prev + (menuWidth / 2));
 		}
 		DecalFont_DrawLine(titleString, offsetX, posY_prev, sVar4, uVar5);
@@ -621,13 +642,13 @@ LAB_80045e94:
 						{
 							textFlags |= 0x8000;
 						}
-						titleString = sdata->lngStrings[uVar5 & 0x7fff];
+						titleString = RECTMENU_GetString(uVar5);
 						index = local_2c;
 					}
 					else
 					{
 						textFlags |= 0x8000;
-						titleString = sdata->lngStrings[uVar5 & 0x7fff];
+						titleString = RECTMENU_GetString(uVar5);
 						sVar4 = (s16)(posX + menu->posX_prev + local_30);
 						index = posX_prev;
 					}

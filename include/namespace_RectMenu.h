@@ -1,6 +1,11 @@
 #ifndef CTR_NATIVE_NAMESPACE_RECTMENU_H
 #define CTR_NATIVE_NAMESPACE_RECTMENU_H
 
+// Native-only menu rows may use these values instead of language-table indexes.
+// They remain below MENU_ROW_LNG_MASK and above every retail language string.
+#define RECTMENU_STRING_NATIVE_BACK 0x7ffd
+#define RECTMENU_STRING_NATIVE_CHEATS 0x7ffe
+
 enum MenuFlags
 {
 	// menu's X position will be used to center it horizontally

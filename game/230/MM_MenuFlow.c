@@ -2,7 +2,7 @@
 
 #if defined(CTR_NATIVE)
 // Keep the retail overlay data layout unchanged. Native uses these extended
-// lists so EXIT stays at the bottom whether or not Scrapbook is unlocked.
+// lists so OPTIONS and EXIT stay at the bottom whether or not Scrapbook is unlocked.
 static struct MenuRow s_nativeRowsMainMenuBasic[] = {
 	{LNG_ADVENTURE, 0, 1, 0, 0},
 	{LNG_TIME_TRIAL, 0, 2, 1, 1},
@@ -10,7 +10,8 @@ static struct MenuRow s_nativeRowsMainMenuBasic[] = {
 	{LNG_VS, 2, 4, 3, 3},
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{LNG_HIGH_SCORE, 4, 6, 5, 5},
-	{LNG_OPTIONS_EXIT, 5, 6, 6, 6},
+	{LNG_OPTIONS, 5, 7, 6, 6},
+	{LNG_OPTIONS_EXIT, 6, 7, 7, 7},
 	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
 };
 
@@ -22,9 +23,269 @@ static struct MenuRow s_nativeRowsMainMenuWithScrapbook[] = {
 	{LNG_BATTLE, 3, 5, 4, 4},
 	{LNG_HIGH_SCORE, 4, 6, 5, 5},
 	{LNG_SCRAPBOOK, 5, 7, 6, 6},
-	{LNG_OPTIONS_EXIT, 6, 7, 7, 7},
+	{LNG_OPTIONS, 6, 8, 7, 7},
+	{LNG_OPTIONS_EXIT, 7, 8, 8, 8},
 	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
 };
+
+enum NativeCheatRow
+{
+	NATIVE_CHEAT_MAX_WUMPA,
+	NATIVE_CHEAT_INFINITE_MASKS,
+	NATIVE_CHEAT_MAX_TURBOS,
+	NATIVE_CHEAT_INVISIBILITY,
+	NATIVE_CHEAT_MAX_ENGINE,
+	NATIVE_CHEAT_MAX_BOMBS,
+	NATIVE_CHEAT_ADV_DIFFICULTY,
+	NATIVE_CHEAT_SUPER_HARD,
+	NATIVE_CHEAT_ICY_TRACKS,
+	NATIVE_CHEAT_SUPER_TURBO_PADS,
+	NATIVE_CHEAT_ONE_LAP,
+	NATIVE_CHEAT_TURBO_COUNTER,
+	NATIVE_CHEAT_UNLOCK_CHARACTERS,
+	NATIVE_CHEAT_UNLOCK_STAGES,
+	NATIVE_CHEAT_UNLOCK_SCRAPBOOK,
+	NATIVE_CHEAT_BACK,
+	NATIVE_CHEAT_COUNT,
+};
+
+struct NativeCheatEntry
+{
+	char *label;
+	u32 gameModeFlag;
+};
+
+static struct NativeCheatEntry s_nativeCheatEntries[NATIVE_CHEAT_COUNT] = {
+	{"MAX WUMPA FRUIT", CHEAT_WUMPA},
+	{"INFINITE MASKS", CHEAT_MASK},
+	{"MAX TURBOS", CHEAT_TURBO},
+	{"INVISIBILITY", CHEAT_INVISIBLE},
+	{"MAX ENGINE", CHEAT_ENGINE},
+	{"MAX BOMBS", CHEAT_BOMBS},
+	{"ADV DIFFICULTY", CHEAT_ADV},
+	{"SUPER HARD", CHEAT_SUPERHARD},
+	{"ICY TRACKS", CHEAT_ICY},
+	{"SUPER TURBO PADS", CHEAT_TURBOPAD},
+	{"ONE LAP RACES", CHEAT_ONELAP},
+	{"TURBO COUNTER", CHEAT_TURBOCOUNT},
+	{"ALL CHARACTERS", 0},
+	{"TRACKS & ARENAS", 0},
+	{"UNLOCK SCRAPBOOK", 0},
+	{"BACK", 0},
+};
+
+static s16 s_nativeCheatSelected;
+static s16 s_nativeCheatFirstVisible;
+static u32 s_nativeCheatOriginalCharacters;
+static u32 s_nativeCheatOriginalStages;
+static b32 s_nativeCheatCharactersForced;
+static b32 s_nativeCheatStagesForced;
+static b32 s_nativeCheatOriginalScrapbook;
+static b32 s_nativeCheatScrapbookForced;
+
+static void MM_NativeOptions_MenuProc(struct RectMenu *menu);
+static void MM_NativeCheats_MenuProc(struct RectMenu *menu);
+
+static struct MenuRow s_nativeRowsOptions[] = {
+	{RECTMENU_STRING_NATIVE_CHEATS, 1, 1, 0, 0},
+	{RECTMENU_STRING_NATIVE_BACK, 0, 0, 1, 1},
+	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
+};
+
+static struct RectMenu s_nativeOptionsMenu = {
+	.stringIndexTitle = LNG_OPTIONS_TITLE,
+	.posX_curr = 0x100,
+	.posY_curr = 0xa0,
+	.state = RECTMENU_STATE_SMALL_EXEC_CENTERED,
+	.rows = s_nativeRowsOptions,
+	.funcPtr = MM_NativeOptions_MenuProc,
+};
+
+static struct RectMenu s_nativeCheatsMenu = {
+	.state = DISABLE_INPUT_ALLOW_FUNCPTRS,
+	.funcPtr = MM_NativeCheats_MenuProc,
+};
+
+static void MM_NativeOptions_MenuProc(struct RectMenu *menu)
+{
+	if (menu->funcState != RECTMENU_FUNC_STATE_INPUT)
+	{
+		return;
+	}
+
+	if (menu->rowSelected == 0)
+	{
+		sdata->ptrDesiredMenu = &s_nativeCheatsMenu;
+	}
+	else
+	{
+		sdata->ptrDesiredMenu = &D230.menuMainMenu;
+	}
+}
+
+static b32 MM_NativeCheats_IsEnabled(s16 row)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	if (s_nativeCheatEntries[row].gameModeFlag != 0)
+	{
+		return (gGT->gameMode2 & s_nativeCheatEntries[row].gameModeFlag) != 0;
+	}
+
+	switch (row)
+	{
+		case NATIVE_CHEAT_UNLOCK_CHARACTERS:
+			return (sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS) == UNLOCK_CHARACTERS;
+		case NATIVE_CHEAT_UNLOCK_STAGES:
+			return (sdata->gameProgress.unlocks[0] & GAME_UNLOCK_TRACKS_MASK) == GAME_UNLOCK_TRACKS_MASK;
+		case NATIVE_CHEAT_UNLOCK_SCRAPBOOK:
+			return CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+	}
+
+	return 0;
+}
+
+static void MM_NativeCheats_Toggle(s16 row)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	if (s_nativeCheatEntries[row].gameModeFlag != 0)
+	{
+		gGT->gameMode2 ^= s_nativeCheatEntries[row].gameModeFlag;
+		return;
+	}
+
+	switch (row)
+	{
+		case NATIVE_CHEAT_UNLOCK_CHARACTERS:
+			if (!s_nativeCheatCharactersForced)
+			{
+				s_nativeCheatOriginalCharacters = sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS;
+				sdata->gameProgress.unlockFlags |= UNLOCK_CHARACTERS;
+				s_nativeCheatCharactersForced = 1;
+			}
+			else
+			{
+				sdata->gameProgress.unlockFlags = (sdata->gameProgress.unlockFlags & ~UNLOCK_CHARACTERS) | s_nativeCheatOriginalCharacters;
+				s_nativeCheatCharactersForced = 0;
+			}
+			break;
+
+		case NATIVE_CHEAT_UNLOCK_STAGES:
+			if (!s_nativeCheatStagesForced)
+			{
+				s_nativeCheatOriginalStages = sdata->gameProgress.unlocks[0] & GAME_UNLOCK_TRACKS_MASK;
+				sdata->gameProgress.unlocks[0] |= GAME_UNLOCK_TRACKS_MASK;
+				s_nativeCheatStagesForced = 1;
+			}
+			else
+			{
+				sdata->gameProgress.unlocks[0] = (sdata->gameProgress.unlocks[0] & ~GAME_UNLOCK_TRACKS_MASK) | s_nativeCheatOriginalStages;
+				s_nativeCheatStagesForced = 0;
+			}
+			break;
+
+		case NATIVE_CHEAT_UNLOCK_SCRAPBOOK:
+			if (!s_nativeCheatScrapbookForced)
+			{
+				s_nativeCheatOriginalScrapbook = CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+				UNLOCK_MEMCARD_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK);
+				s_nativeCheatScrapbookForced = 1;
+			}
+			else
+			{
+				if (!s_nativeCheatOriginalScrapbook)
+				{
+					sdata->gameProgress.unlocks[MEMCARD_BIT_WORD(GAME_UNLOCK_BIT_SCRAPBOOK)] &= ~MEMCARD_BIT_MASK(GAME_UNLOCK_BIT_SCRAPBOOK);
+				}
+				s_nativeCheatScrapbookForced = 0;
+			}
+			break;
+	}
+}
+
+static void MM_NativeCheats_Draw(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	int centerX = gGT->pushBuffer_UI.rect.x + (gGT->pushBuffer_UI.rect.w / 2);
+	const s16 firstY = 42;
+	const s16 rowHeight = data.font_charPixHeight[FONT_SMALL] + 3;
+	const s16 visibleRows = 11;
+	RECT background = {centerX - 150, 20, 300, 202};
+
+	CTR_Box_DrawClearBox(&background, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+	DecalFont_DrawLine("CHEATS", centerX, 25, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+
+	for (s16 displayRow = 0; displayRow < visibleRows; displayRow++)
+	{
+		s16 row = s_nativeCheatFirstVisible + displayRow;
+		s16 y = firstY + (displayRow * rowHeight);
+
+		if (row >= NATIVE_CHEAT_COUNT)
+		{
+			break;
+		}
+
+		if (row == s_nativeCheatSelected)
+		{
+			RECT highlight = {centerX - 144, y - 1, 288, rowHeight};
+			CTR_Box_DrawClearBox(&highlight, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->pushBuffer_UI.ptrOT);
+		}
+
+		DecalFont_DrawLine(s_nativeCheatEntries[row].label, centerX - 138, y, FONT_SMALL, WHITE);
+		if (row != NATIVE_CHEAT_BACK)
+		{
+			DecalFont_DrawLine(MM_NativeCheats_IsEnabled(row) ? "ON" : "OFF", centerX + 132, y, FONT_SMALL, JUSTIFY_RIGHT | ORANGE);
+		}
+	}
+
+	DecalFont_DrawLine("X: TOGGLE   TRIANGLE: BACK", centerX, 210, FONT_SMALL, JUSTIFY_CENTER | WHITE);
+}
+
+static void MM_NativeCheats_MenuProc(struct RectMenu *menu)
+{
+	u32 buttons = sdata->buttonTapPerPlayer[0];
+
+	if ((buttons & BTN_UP) != 0)
+	{
+		s_nativeCheatSelected = (s_nativeCheatSelected + NATIVE_CHEAT_COUNT - 1) % NATIVE_CHEAT_COUNT;
+		OtherFX_Play(0, 1);
+	}
+	else if ((buttons & BTN_DOWN) != 0)
+	{
+		s_nativeCheatSelected = (s_nativeCheatSelected + 1) % NATIVE_CHEAT_COUNT;
+		OtherFX_Play(0, 1);
+	}
+	else if ((buttons & (BTN_CROSS_one | BTN_CIRCLE)) != 0)
+	{
+		if (s_nativeCheatSelected == NATIVE_CHEAT_BACK)
+		{
+			sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		}
+		else
+		{
+			MM_NativeCheats_Toggle(s_nativeCheatSelected);
+			OtherFX_Play(1, 1);
+		}
+	}
+	else if ((buttons & (BTN_TRIANGLE | BTN_SQUARE_one)) != 0)
+	{
+		sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		OtherFX_Play(2, 1);
+	}
+
+	if (s_nativeCheatSelected < s_nativeCheatFirstVisible)
+	{
+		s_nativeCheatFirstVisible = s_nativeCheatSelected;
+	}
+	else if (s_nativeCheatSelected >= s_nativeCheatFirstVisible + 11)
+	{
+		s_nativeCheatFirstVisible = s_nativeCheatSelected - 10;
+	}
+
+	MM_NativeCheats_Draw();
+	RECTMENU_ClearInput();
+}
 #endif
 
 // NOTE(aalhendi): ASM-verified against retail 230 0x800abaf0-0x800abcac.
@@ -169,6 +430,24 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 		return;
 	}
 
+	// get LNG index of row selected
+	s16 choose = mainMenu->rows[mainMenu->rowSelected].stringIndex;
+
+#if defined(CTR_NATIVE)
+	if (choose == LNG_OPTIONS)
+	{
+		sdata->ptrDesiredMenu = &s_nativeOptionsMenu;
+		RECTMENU_ClearInput();
+		return;
+	}
+
+	if (choose == LNG_OPTIONS_EXIT)
+	{
+		Platform_RequestQuit();
+		return;
+	}
+#endif
+
 	// clear flags from game mode
 	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
 
@@ -181,17 +460,6 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// this intentionally disables the 1-lap cheat
 	// in Time Trial and Adventure, DONT change it
 	gGT->numLaps = MM_DEFAULT_LAP_COUNT;
-
-	// get LNG index of row selected
-	s16 choose = mainMenu->rows[mainMenu->rowSelected].stringIndex;
-
-#if defined(CTR_NATIVE)
-	if (choose == LNG_OPTIONS_EXIT)
-	{
-		Platform_RequestQuit();
-		return;
-	}
-#endif
 
 	// Adventure Mode
 	if (choose == LNG_ADVENTURE)
