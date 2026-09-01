@@ -1,5 +1,32 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+// Keep the retail overlay data layout unchanged. Native uses these extended
+// lists so EXIT stays at the bottom whether or not Scrapbook is unlocked.
+static struct MenuRow s_nativeRowsMainMenuBasic[] = {
+	{LNG_ADVENTURE, 0, 1, 0, 0},
+	{LNG_TIME_TRIAL, 0, 2, 1, 1},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_HIGH_SCORE, 4, 6, 5, 5},
+	{LNG_OPTIONS_EXIT, 5, 6, 6, 6},
+	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
+};
+
+static struct MenuRow s_nativeRowsMainMenuWithScrapbook[] = {
+	{LNG_ADVENTURE, 0, 1, 0, 0},
+	{LNG_TIME_TRIAL, 0, 2, 1, 1},
+	{LNG_ARCADE, 1, 3, 2, 2},
+	{LNG_VS, 2, 4, 3, 3},
+	{LNG_BATTLE, 3, 5, 4, 4},
+	{LNG_HIGH_SCORE, 4, 6, 5, 5},
+	{LNG_SCRAPBOOK, 5, 7, 6, 6},
+	{LNG_OPTIONS_EXIT, 6, 7, 7, 7},
+	{RECTMENU_STRING_NONE, 0, 0, 0, 0},
+};
+#endif
+
 // NOTE(aalhendi): ASM-verified against retail 230 0x800abaf0-0x800abcac.
 u8 MM_TransitionInOut(struct TransitionMeta *meta, int framesPassed, int numFrames)
 {
@@ -47,11 +74,15 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+#if defined(CTR_NATIVE)
+	mainMenu->rows = CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK) ? s_nativeRowsMainMenuWithScrapbook : s_nativeRowsMainMenuBasic;
+#else
 	// if scrapbook is unlocked, change "rows" to extended array
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
 		mainMenu->rows = &D230.rowsMainMenuWithScrapbook[0];
 	}
+#endif
 
 	MM_ParseCheatCodes();
 	MM_ToggleRows_Difficulty();
@@ -153,6 +184,14 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 	// get LNG index of row selected
 	s16 choose = mainMenu->rows[mainMenu->rowSelected].stringIndex;
+
+#if defined(CTR_NATIVE)
+	if (choose == LNG_OPTIONS_EXIT)
+	{
+		Platform_RequestQuit();
+		return;
+	}
+#endif
 
 	// Adventure Mode
 	if (choose == LNG_ADVENTURE)

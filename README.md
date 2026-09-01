@@ -165,6 +165,83 @@ The full extracted asset list is:
 - `XA/ENG/GAME/S00.XA` through `S20.XA`
 - `XA/MUSIC/S00.XA` through `S01.XA`
 
+## PC Enhancement Profile
+
+This build includes a native PC-focused enhancement pass. The original PS1
+gameplay and asset formats are preserved, while the renderer is allowed to use
+modern CPU and GPU resources.
+
+### Resolution and image quality
+
+- The game uses a 4K-class internal render target (`3840×2160` minimum), not
+  merely a larger startup window. World geometry, effects, HUD, menus, and the
+  final presentation are all rendered through the higher-resolution native
+  pipeline.
+- Internal supersampling is enabled above the base target when GPU headroom is
+  available. This improves polygon edges, texture sampling, and UI clarity
+  before the image is presented to the window.
+- Native texture sampling uses bilinear filtering and the presentation path is
+  tuned to reduce PS1-era shimmering, dithering, and visibly quantized output.
+- The world renderer has an extended draw distance (10× the original tuned
+  distance), allowing track geometry and scenery to remain visible much farther
+  from the camera.
+- Render-target source rectangles are kept in original PSX coordinates before
+  being scaled. This prevents high-resolution off-screen captures from sampling
+  unrelated VRAM areas.
+
+### Text, HUD, and menus
+
+- Menu and HUD text is rendered through the high-resolution native path, with
+  stronger filtering/sharpening applied selectively to UI content rather than
+  blurring the 3D world.
+- Race-position digits use a direct scalable font draw in place of the original
+  depth-selected 3D number model. This fixes the incorrect/stuck position digit
+  and keeps it legible at 4K in single-player and split-screen modes.
+- The position digit has separate scale and placement tuning so it matches the
+  suffix text while remaining large enough to read at high resolution.
+- Built-in debug menus and tools are enabled in the native build.
+
+### 60 Hz presentation and timing
+
+- Native presentation can run at 60 Hz while legacy game timing is handled
+  separately from render cadence.
+- Frame-authored gameplay paths were audited and converted or gated against
+  elapsed time/legacy cadence where needed. This includes jump timing, TNT and
+  hazard timing, item roulette/weapon cooldowns, animation/state-machine
+  counters, and related race logic.
+- Camera and world-render updates are tuned to reduce stepped motion without
+  advancing gameplay, physics, or animations twice as quickly.
+- The goal is smoother presentation while retaining the original game-speed
+  behavior. Some systems remain deliberately tied to their legacy cadence where
+  changing them would alter CTR gameplay.
+
+### Multiplayer and battle rendering
+
+- The original split-screen renderer used a shared 96×64 PSX VRAM capture for
+  every remote kart. On native builds this capture path is bypassed.
+- In 2-, 3-, and 4-player modes, every active kart is now submitted directly
+  into every active viewport. Remote karts therefore use the same high internal
+  resolution, filtering, and normal geometry path as the owning player's kart.
+- The old capture-tile cache is no longer used by the native multiplayer path,
+  eliminating stale poses, incorrect character images, and ghost pixels from
+  prior remote-kart frames.
+
+### Native usability additions
+
+- The bottom of the main menu includes an **EXIT** item (after **HIGH SCORE**,
+  or after **SCRAPBOOK** when it is unlocked). Selecting it closes the game
+  through the normal orderly native shutdown path, the same as closing the game
+  window.
+
+### Performance expectations
+
+The higher internal resolution, supersampling, longer visibility range, and
+full-resolution multiplayer karts intentionally use more GPU and CPU resources
+than the PS1 renderer. Performance depends on the GPU, driver, display mode,
+and number of active split-screen viewports. If performance is insufficient,
+reduce the native internal-resolution/supersampling settings before changing
+gameplay timing.
+
 ## Bug Replays
 
 Internal builds can record a small bug report folder. See `docs/REPLAYS.md`.

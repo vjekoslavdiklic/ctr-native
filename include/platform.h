@@ -28,6 +28,7 @@ void Platform_PollHostEvents(void);
 int Platform_PollInput(void);
 
 #if defined(CTR_NATIVE)
+void Platform_RequestQuit(void);
 int NikoGetEnterKey(void);
 #endif
 

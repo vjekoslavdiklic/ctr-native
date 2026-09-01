@@ -296,6 +296,13 @@ void Platform_Shutdown(void)
 	Platform_LogShutdown();
 }
 
+void Platform_RequestQuit(void)
+{
+	// Use the same orderly process-exit route as the window close event. The
+	// atexit handler releases audio, input, renderer, and SDL resources.
+	exit(0);
+}
+
 void Platform_BeginFrame(void)
 {
 	// NOTE(aalhendi): Normal rendering begins from DrawOTag after the current
@@ -434,7 +441,7 @@ void Platform_PollHostEvents(void)
 			Platform_InputControllerRemoved(event.gdevice.which);
 			break;
 		case SDL_EVENT_QUIT:
-			exit(0);
+			Platform_RequestQuit();
 			break;
 		case SDL_EVENT_WINDOW_RESIZED:
 			Platform_HandleWindowResize(event.window.data1, event.window.data2);
