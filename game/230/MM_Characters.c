@@ -9,7 +9,11 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
+#if defined(CTR_NATIVE)
+	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
+#else
 	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
+#endif
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
 	MM_CHARACTER_SELECT_MAX_PLAYERS = 4,
@@ -24,8 +28,13 @@ enum
 	MM_CHARACTER_SELECT_LAYOUT_4P = 3,
 	MM_CHARACTER_SELECT_LAYOUT_1P_LIMITED = 4,
 	MM_CHARACTER_SELECT_LAYOUT_2P_LIMITED = 5,
+#if defined(CTR_NATIVE)
+	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 16,
+	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
+#else
 	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 15,
 	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x10,
+#endif
 	MM_CHARACTER_SELECT_3P_TITLE_X = 0x9c,
 	MM_CHARACTER_SELECT_3P_SELECT_Y = 0x14,
 	MM_CHARACTER_SELECT_3P_CHARACTER_Y = 0x26,
@@ -63,6 +72,60 @@ enum
 	MM_CHARACTER_SELECT_COLOR_PULSE_SCALE_SHIFT = 7,
 	MM_CHARACTER_SELECT_COLOR_PULSE_FP_SHIFT = 0xc,
 };
+
+#if defined(CTR_NATIVE)
+static struct CharacterSelectMeta s_nativeCharacterSelectMeta1P2PLimited[MM_CHARACTER_SELECT_ICON_COUNT];
+static struct CharacterSelectMeta s_nativeCharacterSelectMeta1P2P[MM_CHARACTER_SELECT_ICON_COUNT];
+static struct CharacterSelectMeta s_nativeCharacterSelectMeta3P[MM_CHARACTER_SELECT_ICON_COUNT];
+static struct CharacterSelectMeta s_nativeCharacterSelectMeta4P[MM_CHARACTER_SELECT_ICON_COUNT];
+static struct TransitionMeta s_nativeCharacterSelectTransition1P2P[0x15];
+static struct TransitionMeta s_nativeCharacterSelectTransition3P[0x15];
+static struct TransitionMeta s_nativeCharacterSelectTransition4P[0x15];
+static struct CharacterSelectMeta *s_nativeCharacterSelectMetaByLayout[6] = {&s_nativeCharacterSelectMeta1P2P[0], &s_nativeCharacterSelectMeta1P2P[0],
+                                                                              &s_nativeCharacterSelectMeta3P[0],  &s_nativeCharacterSelectMeta4P[0],
+                                                                              &s_nativeCharacterSelectMeta1P2PLimited[0], &s_nativeCharacterSelectMeta1P2PLimited[0]};
+static struct TransitionMeta *s_nativeCharacterSelectTransitionByPlayerCount[4] = {&s_nativeCharacterSelectTransition1P2P[0], &s_nativeCharacterSelectTransition1P2P[0],
+                                                                                    &s_nativeCharacterSelectTransition3P[0],  &s_nativeCharacterSelectTransition4P[0]};
+static b32 s_nativeCharacterSelectInitialized;
+
+static void MM_Characters_InitNativeMeta(struct CharacterSelectMeta *dst, const struct CharacterSelectMeta *src, struct CharacterSelectMeta oxideMeta, s32 oxideLinkIndex)
+{
+	memmove(dst, src, sizeof(struct CharacterSelectMeta) * (MM_CHARACTER_SELECT_ICON_COUNT - 1));
+	dst[MM_CHARACTER_SELECT_ICON_COUNT - 1] = oxideMeta;
+	dst[oxideLinkIndex].nextIconByDirection[CHARACTER_SELECT_DIR_RIGHT] = MM_CHARACTER_SELECT_ICON_COUNT - 1;
+}
+
+static void MM_Characters_InitNativeTransitions(struct TransitionMeta *dst, const struct TransitionMeta *src)
+{
+	memmove(&dst[0], &src[0], sizeof(struct TransitionMeta) * (MM_CHARACTER_SELECT_ICON_COUNT - 1));
+	dst[MM_CHARACTER_SELECT_ICON_COUNT - 1] = src[MM_CHARACTER_SELECT_ICON_COUNT - 2];
+	memmove(&dst[MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX], &src[MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX - 1],
+	        sizeof(struct TransitionMeta) * (0x15 - MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX));
+}
+
+static void MM_Characters_InitNativeCharacterSelect(void)
+{
+	if (s_nativeCharacterSelectInitialized)
+	{
+		return;
+	}
+
+	MM_Characters_InitNativeMeta(s_nativeCharacterSelectMeta1P2PLimited, D230.characterSelectMeta1P2PLimited,
+	                             (struct CharacterSelectMeta){0x160, 0xCE, {7, 15, 14, 15}, NITROS_OXIDE, GAME_UNLOCK_BIT_NITROS_OXIDE}, 14);
+	MM_Characters_InitNativeMeta(s_nativeCharacterSelectMeta1P2P, D230.characterSelectMeta1P2P,
+	                             (struct CharacterSelectMeta){0x160, 0xAE, {7, 15, 14, 15}, NITROS_OXIDE, GAME_UNLOCK_BIT_NITROS_OXIDE}, 14);
+	MM_Characters_InitNativeMeta(s_nativeCharacterSelectMeta3P, D230.characterSelectMeta3P,
+	                             (struct CharacterSelectMeta){0x100, 0x20, {15, 3, 14, 15}, NITROS_OXIDE, GAME_UNLOCK_BIT_NITROS_OXIDE}, 14);
+	MM_Characters_InitNativeMeta(s_nativeCharacterSelectMeta4P, D230.characterSelectMeta4P,
+	                             (struct CharacterSelectMeta){0x120, 0x20, {15, 7, 14, 15}, NITROS_OXIDE, GAME_UNLOCK_BIT_NITROS_OXIDE}, 14);
+
+	MM_Characters_InitNativeTransitions(s_nativeCharacterSelectTransition1P2P, D230.characterSelectTransition1P2P);
+	MM_Characters_InitNativeTransitions(s_nativeCharacterSelectTransition3P, D230.characterSelectTransition3P);
+	MM_Characters_InitNativeTransitions(s_nativeCharacterSelectTransition4P, D230.characterSelectTransition4P);
+
+	s_nativeCharacterSelectInitialized = 1;
+}
+#endif
 
 // NOTE(aalhendi): ASM-verified NTSC-U 926 overlay 230 0x800ad98c-0x800ada4c.
 void MM_Characters_AnimateColors(u8 *colorData, s16 playerID, s16 flag)
@@ -383,6 +446,9 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 void MM_Characters_SetMenuLayout(void)
 {
 	b32 expandRoster = false;
+#if defined(CTR_NATIVE)
+	struct CharacterSelectMeta *metaForExpansion;
+#endif
 
 	// By default, draw "Select character" in 3P menu
 	D230.characterSelectRosterExpanded = 0;
@@ -390,12 +456,21 @@ void MM_Characters_SetMenuLayout(void)
 	s32 numPlyrNextGame = sdata->gGT->numPlyrNextGame;
 	s32 layoutIndex = numPlyrNextGame - 1;
 
+#if defined(CTR_NATIVE)
+	MM_Characters_InitNativeCharacterSelect();
+	metaForExpansion = &s_nativeCharacterSelectMeta1P2P[0];
+#endif
+
 	// Loop through bottom characters,
 	// if any are unlocked, use expanded
 	for (s32 iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
 		// OG game code
+#if defined(CTR_NATIVE)
+		u16 unlocked = metaForExpansion[iconIndex].unlockFlags;
+#else
 		u16 unlocked = D230.characterSelectMeta1P2P[iconIndex].unlockFlags;
+#endif
 
 		if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, unlocked))
 		{
@@ -427,11 +502,15 @@ void MM_Characters_SetMenuLayout(void)
 
 	D230.activeCharacterSelectWindowPos = D230.characterSelectWindowPosByLayout[layoutIndex];
 
+#if defined(CTR_NATIVE)
+	D230.activeCharacterSelectMeta = s_nativeCharacterSelectMetaByLayout[layoutIndex];
+	D230.characterSelectTransitionMeta = s_nativeCharacterSelectTransitionByPlayerCount[numPlyrNextGame - 1];
+#else
 	D230.activeCharacterSelectMeta = D230.characterSelectMetaByLayout[layoutIndex];
+	D230.characterSelectTransitionMeta = D230.characterSelectTransitionByPlayerCount[numPlyrNextGame - 1];
+#endif
 
 	D230.characterSelectNameTextY = D230.characterSelectLayout.textY[layoutIndex];
-
-	D230.characterSelectTransitionMeta = D230.characterSelectTransitionByPlayerCount[numPlyrNextGame - 1];
 
 	return;
 }

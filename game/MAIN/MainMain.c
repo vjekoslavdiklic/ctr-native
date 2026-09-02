@@ -618,7 +618,10 @@ void StateZero()
 		const struct PlatformCheatConfig *cheats = Platform_GetCheatConfig();
 		gGT->gameMode2 = (gGT->gameMode2 & ~CHEAT_ALL) | (cheats->gameModeFlags & CHEAT_ALL);
 		if (cheats->unlockCharacters)
+		{
 			sdata->gameProgress.unlockFlags |= UNLOCK_CHARACTERS;
+			UNLOCK_MEMCARD_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_NITROS_OXIDE);
+		}
 		if (cheats->unlockStages)
 			sdata->gameProgress.unlocks[0] |= GAME_UNLOCK_TRACKS_MASK;
 		if (cheats->unlockScrapbook)

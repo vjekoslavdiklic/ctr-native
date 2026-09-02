@@ -18,6 +18,7 @@ struct PlatformCheatConfig
 	unsigned int originalCharacters;
 	unsigned int originalStages;
 	int originalScrapbook;
+	int originalOxideCharacter;
 	int unlockCharacters;
 	int unlockStages;
 	int unlockScrapbook;

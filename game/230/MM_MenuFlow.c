@@ -392,12 +392,18 @@ static void MM_NativeCheats_Toggle(s16 row)
 			if (!config.unlockCharacters)
 			{
 				config.originalCharacters = sdata->gameProgress.unlockFlags & UNLOCK_CHARACTERS;
+				config.originalOxideCharacter = CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_NITROS_OXIDE);
 				sdata->gameProgress.unlockFlags |= UNLOCK_CHARACTERS;
+				UNLOCK_MEMCARD_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_NITROS_OXIDE);
 				config.unlockCharacters = 1;
 			}
 			else
 			{
 				sdata->gameProgress.unlockFlags = (sdata->gameProgress.unlockFlags & ~UNLOCK_CHARACTERS) | config.originalCharacters;
+				if (!config.originalOxideCharacter)
+				{
+					sdata->gameProgress.unlocks[MEMCARD_BIT_WORD(GAME_UNLOCK_BIT_NITROS_OXIDE)] &= ~MEMCARD_BIT_MASK(GAME_UNLOCK_BIT_NITROS_OXIDE);
+				}
 				config.unlockCharacters = 0;
 			}
 			break;

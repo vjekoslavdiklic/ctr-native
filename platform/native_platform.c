@@ -69,10 +69,10 @@ internal void Platform_SaveVideoConfig(void)
 	{
 		fprintf(file,
 		        "resolution=%d\nfps=%d\ndraw_distance=%d\nskip_all_intro=%d\ncheat_flags=%u\nunlock_characters=%d\nunlock_stages=%d\nunlock_scrapbook=%d\n"
-		        "unlock_characters_original=%u\nunlock_stages_original=%u\nunlock_scrapbook_original=%d\n",
+		        "unlock_characters_original=%u\nunlock_stages_original=%u\nunlock_scrapbook_original=%d\nunlock_oxide_original=%d\n",
 		        s_configResolutionPreset, s_configFPS, s_configDrawDistance, s_configSkipAllIntro, s_configCheats.gameModeFlags, s_configCheats.unlockCharacters,
 		        s_configCheats.unlockStages, s_configCheats.unlockScrapbook, s_configCheats.originalCharacters, s_configCheats.originalStages,
-		        s_configCheats.originalScrapbook);
+		        s_configCheats.originalScrapbook, s_configCheats.originalOxideCharacter);
 		fclose(file);
 	}
 }
@@ -109,6 +109,8 @@ internal int Platform_LoadVideoConfig(void)
 			;
 		else if (sscanf(line, "unlock_scrapbook_original=%d", &value) == 1 && (value == 0 || value == 1))
 			s_configCheats.originalScrapbook = value;
+		else if (sscanf(line, "unlock_oxide_original=%d", &value) == 1 && (value == 0 || value == 1))
+			s_configCheats.originalOxideCharacter = value;
 	}
 	fclose(file);
 	return 1;
@@ -485,6 +487,7 @@ void Platform_SetCheatConfig(const struct PlatformCheatConfig *config)
 	s_configCheats.unlockStages = s_configCheats.unlockStages != 0;
 	s_configCheats.unlockScrapbook = s_configCheats.unlockScrapbook != 0;
 	s_configCheats.originalScrapbook = s_configCheats.originalScrapbook != 0;
+	s_configCheats.originalOxideCharacter = s_configCheats.originalOxideCharacter != 0;
 	Platform_SaveVideoConfig();
 }
 
